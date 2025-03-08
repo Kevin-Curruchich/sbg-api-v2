@@ -1,0 +1,265 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model charge_statuses {
+  charge_status_id String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  name             String    @db.VarChar(50)
+  description      String?
+  is_active        Boolean   @default(true)
+  created_at       DateTime  @default(now()) @db.Timestamp(6)
+  updated_at       DateTime  @default(now()) @db.Timestamp(6)
+  charges          charges[]
+}
+
+model charge_type_applicability {
+  charge_type_applicability_id String         @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  charge_type_id               String         @db.Uuid
+  student_type_id              String         @db.Uuid
+  frequency                    frequency_enum
+  is_active                    Boolean        @default(true)
+  created_at                   DateTime       @default(now()) @db.Timestamp(6)
+  updated_at                   DateTime       @default(now()) @db.Timestamp(6)
+  charge_types                 charge_types   @relation(fields: [charge_type_id], references: [charge_type_id], onDelete: Cascade, onUpdate: NoAction, map: "fk_charge_app_charge_type")
+  student_types                student_types  @relation(fields: [student_type_id], references: [student_type_id], onDelete: Cascade, onUpdate: NoAction, map: "fk_charge_app_student_type")
+}
+
+model charge_types {
+  charge_type_id            String                      @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  name                      String                      @db.VarChar(50)
+  description               String?
+  default_amount            Decimal?                    @db.Decimal(10, 2)
+  is_recurring              Boolean                     @default(false)
+  created_at                DateTime                    @default(now()) @db.Timestamp(6)
+  updated_at                DateTime                    @default(now()) @db.Timestamp(6)
+  program_id                String?                     @db.Uuid
+  charge_type_applicability charge_type_applicability[]
+  programs                  programs?                   @relation(fields: [program_id], references: [program_id], onUpdate: NoAction, map: "fk_charge_types_program")
+  charges                   charges[]
+}
+
+model charges {
+  charge_id        String            @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  student_id       String            @db.Uuid
+  enrollment_id    String?           @db.Uuid
+  charge_type_id   String            @db.Uuid
+  charge_status_id String            @db.Uuid
+  description      String?
+  original_amount  Decimal           @default(0) @db.Decimal(10, 2)
+  current_amount   Decimal           @default(0) @db.Decimal(10, 2)
+  due_date         DateTime?         @db.Date
+  created_at       DateTime          @default(now()) @db.Timestamp(6)
+  updated_at       DateTime          @default(now()) @db.Timestamp(6)
+  charge_statuses  charge_statuses   @relation(fields: [charge_status_id], references: [charge_status_id], onUpdate: NoAction, map: "fk_charges_charge_status")
+  charge_types     charge_types      @relation(fields: [charge_type_id], references: [charge_type_id], onUpdate: NoAction, map: "fk_charges_charge_type")
+  enrollments      enrollments?      @relation(fields: [enrollment_id], references: [enrollment_id], onUpdate: NoAction, map: "fk_charges_enrollments")
+  students         students          @relation(fields: [student_id], references: [student_id], onUpdate: NoAction, map: "fk_charges_students")
+  payment_details  payment_details[]
+}
+
+model enrollment_statuses {
+  enrollment_status_id String        @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  name                 String        @db.VarChar(50)
+  description          String?
+  is_active            Boolean       @default(true)
+  created_at           DateTime      @default(now()) @db.Timestamp(6)
+  updated_at           DateTime      @default(now()) @db.Timestamp(6)
+  enrollments          enrollments[]
+}
+
+model enrollments {
+  enrollment_id        String              @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  student_id           String              @db.Uuid
+  term_id              String              @db.Uuid
+  enrollment_status_id String              @db.Uuid
+  enrollment_date      DateTime            @default(dbgenerated("CURRENT_DATE")) @db.Date
+  created_at           DateTime            @default(now()) @db.Timestamp(6)
+  updated_at           DateTime            @default(now()) @db.Timestamp(6)
+  program_id           String?             @db.Uuid
+  charges              charges[]
+  enrollment_statuses  enrollment_statuses @relation(fields: [enrollment_status_id], references: [enrollment_status_id], onUpdate: NoAction, map: "fk_enrollments_enrollment_statuses")
+  programs             programs?           @relation(fields: [program_id], references: [program_id], onDelete: Cascade, onUpdate: NoAction, map: "fk_enrollments_program")
+  students             students            @relation(fields: [student_id], references: [student_id], onUpdate: NoAction, map: "fk_enrollments_students")
+  terms                terms               @relation(fields: [term_id], references: [term_id], onUpdate: NoAction, map: "fk_enrollments_terms")
+}
+
+model payment_details {
+  payment_detail_id String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  payment_id        String   @db.Uuid
+  charge_id         String   @db.Uuid
+  applied_amount    Decimal  @db.Decimal(10, 2)
+  charges           charges  @relation(fields: [charge_id], references: [charge_id], onUpdate: NoAction, map: "fk_payment_details_charge")
+  payments          payments @relation(fields: [payment_id], references: [payment_id], onUpdate: NoAction, map: "fk_payment_details_payment")
+}
+
+model payment_evidence {
+  evidence_id String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  payment_id  String   @db.Uuid
+  file_path   String   @db.VarChar(255)
+  uploaded_at DateTime @default(now()) @db.Timestamp(6)
+  payments    payments @relation(fields: [payment_id], references: [payment_id], onDelete: Cascade, onUpdate: NoAction, map: "fk_payment_evidence_payment")
+}
+
+model payments {
+  payment_id        String             @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  student_id        String             @db.Uuid
+  payment_date      DateTime           @default(now()) @db.Timestamp(6)
+  amount            Decimal            @db.Decimal(10, 2)
+  payment_method    String             @db.VarChar(50)
+  reference_number  String?            @db.VarChar(100)
+  created_at        DateTime           @default(now()) @db.Timestamp(6)
+  updated_at        DateTime           @default(now()) @db.Timestamp(6)
+  payment_method_id String?            @db.Uuid
+  payment_details   payment_details[]
+  payment_evidence  payment_evidence[]
+  payment_methods   payment_methods?   @relation(fields: [payment_method_id], references: [payment_method_id], onUpdate: NoAction, map: "fk_payments_payment_method")
+  students          students           @relation(fields: [student_id], references: [student_id], onUpdate: NoAction, map: "fk_payments_students")
+}
+
+model student_balance {
+  student_id String   @id @db.Uuid
+  balance    Decimal  @default(0) @db.Decimal(10, 2)
+  updated_at DateTime @default(now()) @db.Timestamp(6)
+  students   students @relation(fields: [student_id], references: [student_id], onDelete: Cascade, onUpdate: NoAction, map: "fk_student_balance_student")
+}
+
+model student_grades {
+  student_grade_id        String                 @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  student_id              String                 @db.Uuid
+  program_level_id        String                 @db.Uuid
+  start_date              DateTime               @default(now()) @db.Date
+  end_date                DateTime?              @db.Date
+  created_at              DateTime               @default(now()) @db.Timestamp(6)
+  updated_at              DateTime               @default(now()) @db.Timestamp(6)
+  student_grade_status_id String                 @db.Uuid
+  student_grade_statuses  student_grade_statuses @relation(fields: [student_grade_status_id], references: [student_grade_status_id], onUpdate: NoAction, map: "fk_student_grade_status")
+  program_levels          program_levels         @relation(fields: [program_level_id], references: [program_level_id], onUpdate: NoAction, map: "fk_student_grades_program_level")
+  students                students               @relation(fields: [student_id], references: [student_id], onDelete: Cascade, onUpdate: NoAction, map: "fk_student_grades_student")
+}
+
+model student_statuses {
+  student_status_id String     @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  name              String     @db.VarChar(50)
+  description       String?
+  is_active         Boolean    @default(true)
+  created_at        DateTime   @default(now()) @db.Timestamp(6)
+  updated_at        DateTime   @default(now()) @db.Timestamp(6)
+  students          students[]
+}
+
+model student_types {
+  student_type_id           String                      @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  name                      String                      @db.VarChar(50)
+  description               String?
+  is_active                 Boolean                     @default(true)
+  created_at                DateTime                    @default(now()) @db.Timestamp(6)
+  updated_at                DateTime                    @default(now()) @db.Timestamp(6)
+  program_id                String?                     @db.Uuid
+  charge_type_applicability charge_type_applicability[]
+  programs                  programs?                   @relation(fields: [program_id], references: [program_id], onUpdate: NoAction, map: "fk_student_types_program")
+  students                  students[]
+}
+
+model students {
+  student_id        String            @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  first_name        String            @db.VarChar(50)
+  last_name         String            @db.VarChar(50)
+  document_id       String?           @unique(map: "unique_students_document_id") @db.VarChar(50)
+  email             String?           @unique(map: "unique_students_email") @db.VarChar(100)
+  phone_number      String?           @db.VarChar(50)
+  address           String?
+  birthday          DateTime?         @db.Date
+  student_type_id   String?           @db.Uuid
+  student_status_id String?           @db.Uuid
+  created_at        DateTime          @default(now()) @db.Timestamp(6)
+  updated_at        DateTime          @default(now()) @db.Timestamp(6)
+  charges           charges[]
+  enrollments       enrollments[]
+  payments          payments[]
+  student_balance   student_balance?
+  student_grades    student_grades[]
+  student_statuses  student_statuses? @relation(fields: [student_status_id], references: [student_status_id], onUpdate: NoAction, map: "fk_students_student_statuses")
+  student_types     student_types?    @relation(fields: [student_type_id], references: [student_type_id], onUpdate: NoAction, map: "fk_students_student_types")
+}
+
+model term_statuses {
+  term_status_id String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  name           String   @db.VarChar(50)
+  description    String?
+  created_at     DateTime @default(now()) @db.Timestamp(6)
+  updated_at     DateTime @default(now()) @db.Timestamp(6)
+  terms          terms[]
+}
+
+model terms {
+  term_id        String         @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  term_name      String         @db.VarChar(50)
+  start_date     DateTime       @db.Date
+  end_date       DateTime?      @db.Date
+  term_status_id String?        @db.Uuid
+  created_at     DateTime       @default(now()) @db.Timestamp(6)
+  updated_at     DateTime       @default(now()) @db.Timestamp(6)
+  enrollments    enrollments[]
+  term_statuses  term_statuses? @relation(fields: [term_status_id], references: [term_status_id], onUpdate: NoAction, map: "fk_terms_term_status")
+}
+
+model student_grade_statuses {
+  student_grade_status_id String           @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  name                    String           @db.VarChar(50)
+  description             String?
+  created_at              DateTime         @default(now()) @db.Timestamp(6)
+  updated_at              DateTime         @default(now()) @db.Timestamp(6)
+  student_grades          student_grades[]
+}
+
+model program_levels {
+  program_level_id String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  program_id       String           @db.Uuid
+  name             String           @db.VarChar(50)
+  order_index      Int?
+  created_at       DateTime         @default(now()) @db.Timestamp(6)
+  updated_at       DateTime         @default(now()) @db.Timestamp(6)
+  programs         programs         @relation(fields: [program_id], references: [program_id], onDelete: Cascade, onUpdate: NoAction, map: "fk_program_levels_program")
+  student_grades   student_grades[]
+}
+
+model programs {
+  program_id     String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name           String           @db.VarChar(100)
+  description    String?
+  created_at     DateTime         @default(now()) @db.Timestamp(6)
+  updated_at     DateTime         @default(now()) @db.Timestamp(6)
+  charge_types   charge_types[]
+  enrollments    enrollments[]
+  program_levels program_levels[]
+  student_types  student_types[]
+}
+
+model payment_methods {
+  payment_method_id String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name              String     @db.VarChar(50)
+  description       String?
+  is_active         Boolean    @default(true)
+  created_at        DateTime   @default(now()) @db.Timestamp(6)
+  updated_at        DateTime   @default(now()) @db.Timestamp(6)
+  payments          payments[]
+}
+
+enum frequency_enum {
+  monthly
+  term
+  once
+  annual
+}
+
+enum student_grade_status_enum {
+  regular
+  rezagado
+  repitiente
+  finalizado
+}
