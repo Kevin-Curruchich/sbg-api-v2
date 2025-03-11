@@ -3,6 +3,7 @@ import {
   IsArray,
   IsDateString,
   IsNumber,
+  IsOptional,
   IsString,
   ValidateNested,
 } from 'class-validator';
@@ -15,7 +16,7 @@ export class CreateStudentPaymentDto {
   amount: number;
 
   @IsString()
-  payment_method: string;
+  payment_method_id: string;
 
   @IsString()
   reference_number: string;
@@ -36,4 +37,8 @@ export class PaymentDetails {
 
   @IsNumber()
   applied_amount: number;
+
+  @IsOptional()
+  @IsString()
+  description: string;
 }

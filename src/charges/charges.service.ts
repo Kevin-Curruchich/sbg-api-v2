@@ -8,6 +8,7 @@ import { CreateForStudentChargeDto } from './dto/create-charge-for-student.dto';
 
 import { ChargesRepository } from './charges.repository';
 import { ChargeStatuses } from 'src/common/constants/charge-status.constant';
+import StudentChargesQueryDto from './dto/student-charges-query.dto';
 
 @Injectable()
 export class ChargesService {
@@ -36,8 +37,46 @@ export class ChargesService {
     return this.chargesRepository.getChargesByProgramId(programId);
   }
 
-  getChargesByStudentId(studentId: string) {
-    return this.chargesRepository.getChargesByStudentId(studentId);
+  updateChargeStatus(chargeId: string, data: { charge_status_id: string }) {
+    return this.chargesRepository.updateChargeStatus(chargeId, data);
+  }
+
+  async getChargesByStudentId(
+    studentId: string,
+    chargesQuery: StudentChargesQueryDto,
+  ) {
+    const studentChargesAndPayment =
+      await this.chargesRepository.getChargesByStudentId(
+        studentId,
+        chargesQuery,
+      );
+
+    //map the student charge and payment and return by charge the total amount paid and the total amount due for each charge
+    return studentChargesAndPayment.map((charge) => {
+      const totalAmountPaid = charge.payment_details.reduce(
+        (acc, payment) => acc + Number(payment.applied_amount),
+        0,
+      );
+
+      const totalAmountDue = Number(charge.current_amount) - totalAmountPaid;
+
+      return {
+        ...charge,
+        due_date: dayjs(charge.due_date).format('YYYY-MM-DD'),
+        due_date_formatted: dayjs(charge.due_date).format('DD/MM/YYYY'),
+        totalAmountPaid,
+        totalAmountDue,
+        payment_details: charge.payment_details.map((payment) => ({
+          ...payment,
+          payment_date: dayjs(payment.payments.payment_date).format(
+            'YYYY-MM-DD',
+          ),
+          payment_date_formatted: dayjs(payment.payments.payment_date).format(
+            'DD/MM/YYYY',
+          ),
+        })),
+      };
+    });
   }
 
   findOne(id: number) {

@@ -12,6 +12,7 @@ import { ChargesService } from './charges.service';
 import { CreateChargeDto } from './dto/create-charge.dto';
 import { UpdateChargeDto } from './dto/update-charge.dto';
 import { CreateForStudentChargeDto } from './dto/create-charge-for-student.dto';
+import StudentChargesQueryDto from './dto/student-charges-query.dto';
 
 @Controller('charges')
 export class ChargesController {
@@ -28,8 +29,11 @@ export class ChargesController {
   }
 
   @Get('student/:studentId')
-  getChargesByStudentId(@Param('studentId') studentId: string) {
-    return this.chargesService.getChargesByStudentId(studentId);
+  getChargesByStudentId(
+    @Param('studentId') studentId: string,
+    @Query() chargesQuery: StudentChargesQueryDto,
+  ) {
+    return this.chargesService.getChargesByStudentId(studentId, chargesQuery);
   }
 
   @Get()

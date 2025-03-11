@@ -1,6 +1,10 @@
 import { Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 
 import * as dayjs from 'dayjs';
+
+import { ChargeStatuses } from 'src/common/constants/charge-status.constant';
+import { ChargesService } from '../charges/charges.service';
 
 import { StudentService } from 'src/students/students.service';
 import SendGridService from '../common/sendgrid.service';
@@ -9,7 +13,6 @@ import { CreateStudentPaymentDto } from './dto/create-student-payment.dto';
 import { UpdatePaymentDto } from './dto/update-payment.dto';
 
 import { PaymentsRepository } from './payments.repository';
-import { ConfigService } from '@nestjs/config';
 
 @Injectable()
 export class PaymentsService {
@@ -18,12 +21,41 @@ export class PaymentsService {
     private readonly sendGridService: SendGridService,
     private readonly studentsService: StudentService,
     private readonly configService: ConfigService,
+    private readonly chargesService: ChargesService,
   ) {}
 
   async createStudentPayment(createPaymentDto: CreateStudentPaymentDto) {
     const paymentCreated = await this.paymentsRepository.createStudentPayment({
       ...createPaymentDto,
       payment_date: dayjs(createPaymentDto.payment_date).toDate(),
+    });
+
+    //Get student charges applied to the payment and validate if each charge is paid in full or not to update the charge status
+    const studentCharges = paymentCreated[0].payment_details.map((detail) => ({
+      charge_id: detail.charges.charge_id,
+      current_amount: detail.charges.current_amount,
+      payment_applied_amount: detail.applied_amount,
+    }));
+
+    //update charge status
+    studentCharges.forEach(async (charge) => {
+      const paymentsByStudentCharge =
+        await this.paymentsRepository.getPaymentsByChargeId(charge.charge_id);
+
+      const totalAmountPaidByCharge = paymentsByStudentCharge.reduce(
+        (acc, payment) => acc + Number(payment.applied_amount),
+        0,
+      );
+
+      if (Number(charge.current_amount) === totalAmountPaidByCharge) {
+        await this.chargesService.updateChargeStatus(charge.charge_id, {
+          charge_status_id: ChargeStatuses.TOTAL_PAID,
+        });
+      } else {
+        await this.chargesService.updateChargeStatus(charge.charge_id, {
+          charge_status_id: ChargeStatuses.PARTIAL_PAID,
+        });
+      }
     });
 
     //send email to student
@@ -38,7 +70,7 @@ export class PaymentsService {
       paymentAmount: paymentCreated[0].amount,
       paymentDetails: paymentCreated[0].payment_details.map((detail) => ({
         collectionName: detail.charges.charge_types.name,
-        paymentDescription: detail.charges.charge_types.name,
+        paymentDescription: detail.description,
         paymentAmount: detail.applied_amount,
       })),
     };
@@ -48,6 +80,8 @@ export class PaymentsService {
       this.configService.get<string>('PAYMENT_TEMPLATE_ID'),
       paymentData,
     );
+
+    return paymentCreated;
   }
 
   findAll() {

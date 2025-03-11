@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from 'src/prisma/prisma.service';
+import StudentChargesQueryDto from './dto/student-charges-query.dto';
 
 @Injectable()
 export class ChargesRepository {
@@ -39,7 +40,7 @@ export class ChargesRepository {
           },
           update: {
             balance: {
-              decrement: data.original_amount,
+              increment: data.original_amount,
             },
           },
         }),
@@ -51,16 +52,49 @@ export class ChargesRepository {
     }
   }
 
-  async getChargesByStudentId(studentId: string) {
+  async getChargesByStudentId(
+    studentId: string,
+    chargesQuery: StudentChargesQueryDto,
+  ) {
+    const { due_date } = chargesQuery;
+
     const studentCharges = await this.prismaService.charges.findMany({
       where: {
         student_id: studentId,
+        charge_status_id: chargesQuery.charge_status_id,
+        due_date: due_date
+          ? {
+              gte: due_date,
+              lte: new Date(),
+            }
+          : undefined,
       },
-      include: {
-        charge_types: true,
-        charge_statuses: true,
+      select: {
+        charge_id: true,
+        current_amount: true,
+        original_amount: true,
+        due_date: true,
+        created_at: true,
+        updated_at: true,
+        charge_types: {
+          select: {
+            charge_type_id: true,
+            name: true,
+            description: true,
+            default_amount: true,
+          },
+        },
+        charge_statuses: {
+          select: {
+            name: true,
+            description: true,
+            charge_status_id: true,
+          },
+        },
         payment_details: {
-          include: {
+          select: {
+            payment_detail_id: true,
+            applied_amount: true,
             payments: {
               select: {
                 payment_evidence: true,
@@ -73,6 +107,20 @@ export class ChargesRepository {
     });
 
     return studentCharges;
+  }
+
+  async updateChargeStatus(
+    chargeId: string,
+    data: { charge_status_id: string },
+  ) {
+    return await this.prismaService.charges.update({
+      where: {
+        charge_id: chargeId,
+      },
+      data: {
+        charge_status_id: data.charge_status_id,
+      },
+    });
   }
 
   private async handleError(error: Prisma.PrismaClientKnownRequestError) {

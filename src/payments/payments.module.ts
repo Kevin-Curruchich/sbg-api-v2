@@ -1,7 +1,9 @@
 import { Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+
 import { PrismaModule } from 'src/prisma/prisma.module';
 import { StudentsModule } from 'src/students/students.module';
+import { ChargesModule } from 'src/charges/charges.module';
 
 import { CommonModule } from '../common/common.module';
 
@@ -10,7 +12,7 @@ import { PaymentsController } from './payments.controller';
 import { PaymentsRepository } from './payments.repository';
 
 @Module({
-  imports: [PrismaModule, StudentsModule, CommonModule],
+  imports: [PrismaModule, StudentsModule, CommonModule, ChargesModule],
   controllers: [PaymentsController],
   providers: [PaymentsService, PaymentsRepository, ConfigService],
 })

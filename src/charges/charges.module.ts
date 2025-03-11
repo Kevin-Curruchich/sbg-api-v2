@@ -8,5 +8,6 @@ import { ChargesRepository } from './charges.repository';
   imports: [PrismaModule],
   controllers: [ChargesController],
   providers: [ChargesService, ChargesRepository],
+  exports: [ChargesService],
 })
 export class ChargesModule {}

@@ -93,6 +93,7 @@ model payment_details {
   payment_id        String   @db.Uuid
   charge_id         String   @db.Uuid
   applied_amount    Decimal  @db.Decimal(10, 2)
+  description       String?  @db.VarChar(150)
   charges           charges  @relation(fields: [charge_id], references: [charge_id], onUpdate: NoAction, map: "fk_payment_details_charge")
   payments          payments @relation(fields: [payment_id], references: [payment_id], onUpdate: NoAction, map: "fk_payment_details_payment")
 }
@@ -110,14 +111,13 @@ model payments {
   student_id        String             @db.Uuid
   payment_date      DateTime           @default(now()) @db.Timestamp(6)
   amount            Decimal            @db.Decimal(10, 2)
-  payment_method    String             @db.VarChar(50)
   reference_number  String?            @db.VarChar(100)
   created_at        DateTime           @default(now()) @db.Timestamp(6)
   updated_at        DateTime           @default(now()) @db.Timestamp(6)
-  payment_method_id String?            @db.Uuid
+  payment_method_id String             @db.Uuid
   payment_details   payment_details[]
   payment_evidence  payment_evidence[]
-  payment_methods   payment_methods?   @relation(fields: [payment_method_id], references: [payment_method_id], onUpdate: NoAction, map: "fk_payments_payment_method")
+  payment_methods   payment_methods    @relation(fields: [payment_method_id], references: [payment_method_id], onDelete: SetNull, onUpdate: NoAction, map: "fk_payments_payment_method")
   students          students           @relation(fields: [student_id], references: [student_id], onUpdate: NoAction, map: "fk_payments_students")
 }
 

@@ -1,18 +1,19 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
+import { CreateStudentPaymentDto } from './dto/create-student-payment.dto';
 
 @Injectable()
 export class PaymentsRepository {
   constructor(private readonly prismaService: PrismaService) {}
 
-  async createStudentPayment(data: any) {
+  async createStudentPayment(data: CreateStudentPaymentDto) {
     try {
       //create a new prisma transaction, create a new payment, and create the payment details for finish to update the student balance
       const payment = await this.prismaService.$transaction([
         this.prismaService.payments.create({
           data: {
             student_id: data.student_id,
-            payment_method: data.payment_method,
+            payment_method_id: data.payment_method_id,
             reference_number: data.reference_number,
             amount: data.amount,
             payment_date: data.payment_date,
@@ -22,12 +23,17 @@ export class PaymentsRepository {
           },
           include: {
             payment_details: {
-              include: {
+              select: {
+                applied_amount: true,
+                description: true,
                 charges: {
                   select: {
+                    charge_id: true,
+                    current_amount: true,
                     charge_types: {
                       select: {
                         name: true,
+                        charge_type_id: true,
                       },
                     },
                   },
@@ -51,7 +57,14 @@ export class PaymentsRepository {
       return payment;
     } catch (error) {
       console.log(error);
-      //   this.handleError(error);
     }
+  }
+
+  async getPaymentsByChargeId(studentChargeId: string) {
+    return await this.prismaService.payment_details.findMany({
+      where: {
+        charge_id: studentChargeId,
+      },
+    });
   }
 }
