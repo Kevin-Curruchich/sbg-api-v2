@@ -18,15 +18,17 @@ model charge_statuses {
 }
 
 model charge_type_applicability {
-  charge_type_applicability_id String         @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
-  charge_type_id               String         @db.Uuid
-  student_type_id              String         @db.Uuid
+  charge_type_applicability_id String          @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  charge_type_id               String          @db.Uuid
+  student_type_id              String?         @db.Uuid
   frequency                    frequency_enum
-  is_active                    Boolean        @default(true)
-  created_at                   DateTime       @default(now()) @db.Timestamp(6)
-  updated_at                   DateTime       @default(now()) @db.Timestamp(6)
-  charge_types                 charge_types   @relation(fields: [charge_type_id], references: [charge_type_id], onDelete: Cascade, onUpdate: NoAction, map: "fk_charge_app_charge_type")
-  student_types                student_types  @relation(fields: [student_type_id], references: [student_type_id], onDelete: Cascade, onUpdate: NoAction, map: "fk_charge_app_student_type")
+  is_active                    Boolean         @default(true)
+  created_at                   DateTime        @default(now()) @db.Timestamp(6)
+  updated_at                   DateTime        @default(now()) @db.Timestamp(6)
+  program_level_id             String?         @db.Uuid
+  charge_types                 charge_types    @relation(fields: [charge_type_id], references: [charge_type_id], onDelete: Cascade, onUpdate: NoAction, map: "fk_charge_app_charge_type")
+  student_types                student_types?  @relation(fields: [student_type_id], references: [student_type_id], onDelete: Cascade, onUpdate: NoAction, map: "fk_charge_app_student_type")
+  program_levels               program_levels? @relation(fields: [program_level_id], references: [program_level_id], onDelete: Cascade, onUpdate: NoAction, map: "fk_cta_program_level")
 }
 
 model charge_types {
@@ -95,7 +97,7 @@ model payment_details {
   applied_amount    Decimal  @db.Decimal(10, 2)
   description       String?  @db.VarChar(150)
   charges           charges  @relation(fields: [charge_id], references: [charge_id], onUpdate: NoAction, map: "fk_payment_details_charge")
-  payments          payments @relation(fields: [payment_id], references: [payment_id], onUpdate: NoAction, map: "fk_payment_details_payment")
+  payments          payments @relation(fields: [payment_id], references: [payment_id], onDelete: Cascade, onUpdate: NoAction, map: "fk_payment_details_payment")
 }
 
 model payment_evidence {
@@ -204,7 +206,9 @@ model terms {
   term_status_id String?        @db.Uuid
   created_at     DateTime       @default(now()) @db.Timestamp(6)
   updated_at     DateTime       @default(now()) @db.Timestamp(6)
+  program_id     String?        @db.Uuid
   enrollments    enrollments[]
+  programs       programs?      @relation(fields: [program_id], references: [program_id], onDelete: Cascade, onUpdate: NoAction, map: "fk_terms_program")
   term_statuses  term_statuses? @relation(fields: [term_status_id], references: [term_status_id], onUpdate: NoAction, map: "fk_terms_term_status")
 }
 
@@ -218,14 +222,15 @@ model student_grade_statuses {
 }
 
 model program_levels {
-  program_level_id String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  program_id       String           @db.Uuid
-  name             String           @db.VarChar(50)
-  order_index      Int?
-  created_at       DateTime         @default(now()) @db.Timestamp(6)
-  updated_at       DateTime         @default(now()) @db.Timestamp(6)
-  programs         programs         @relation(fields: [program_id], references: [program_id], onDelete: Cascade, onUpdate: NoAction, map: "fk_program_levels_program")
-  student_grades   student_grades[]
+  program_level_id          String                      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  program_id                String                      @db.Uuid
+  name                      String                      @db.VarChar(50)
+  order_index               Int?
+  created_at                DateTime                    @default(now()) @db.Timestamp(6)
+  updated_at                DateTime                    @default(now()) @db.Timestamp(6)
+  charge_type_applicability charge_type_applicability[]
+  programs                  programs                    @relation(fields: [program_id], references: [program_id], onDelete: Cascade, onUpdate: NoAction, map: "fk_program_levels_program")
+  student_grades            student_grades[]
 }
 
 model programs {
@@ -238,6 +243,7 @@ model programs {
   enrollments    enrollments[]
   program_levels program_levels[]
   student_types  student_types[]
+  terms          terms[]
 }
 
 model payment_methods {

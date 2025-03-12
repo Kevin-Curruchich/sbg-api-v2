@@ -10,7 +10,6 @@ import { StudentService } from 'src/students/students.service';
 import SendGridService from '../common/sendgrid.service';
 
 import { CreateStudentPaymentDto } from './dto/create-student-payment.dto';
-import { UpdatePaymentDto } from './dto/update-payment.dto';
 
 import { PaymentsRepository } from './payments.repository';
 
@@ -34,7 +33,6 @@ export class PaymentsService {
     const studentCharges = paymentCreated[0].payment_details.map((detail) => ({
       charge_id: detail.charges.charge_id,
       current_amount: detail.charges.current_amount,
-      payment_applied_amount: detail.applied_amount,
     }));
 
     //update charge status
@@ -92,11 +90,75 @@ export class PaymentsService {
     return `This action returns a #${id} payment`;
   }
 
-  update(id: number, updatePaymentDto: UpdatePaymentDto) {
-    return `This action updates a #${id} payment`;
-  }
+  async removePaymentById(paymentId: string) {
+    const payment = await this.paymentsRepository.getPaymentById(paymentId, {
+      includePaymentDetails: true,
+      includeStudentData: true,
+    });
 
-  remove(id: number) {
-    return `This action removes a #${id} payment`;
+    //Get student charges applied to the payment and validate if each charge is paid in full or not to update the charge status
+    const studentCharges = payment.payment_details.map((detail) => ({
+      charge_id: detail.charges.charge_id,
+      current_amount: detail.charges.current_amount,
+      payment_applied_amount: Number(detail.applied_amount),
+    }));
+
+    //update charge status
+    studentCharges.forEach(async (charge) => {
+      const paymentsByStudentCharge =
+        await this.paymentsRepository.getPaymentsByChargeId(charge.charge_id);
+
+      const totalAmountPaidByCharge = paymentsByStudentCharge.reduce(
+        (acc, payment) => acc + Number(payment.applied_amount),
+        0,
+      );
+
+      let newStatus;
+
+      if (totalAmountPaidByCharge === 0) {
+        newStatus = ChargeStatuses.PENDING;
+      } else if (totalAmountPaidByCharge < Number(charge.current_amount)) {
+        newStatus = ChargeStatuses.PARTIAL_PAID;
+      } else if (totalAmountPaidByCharge === Number(charge.current_amount)) {
+        newStatus = ChargeStatuses.TOTAL_PAID;
+      }
+      await this.chargesService.updateChargeStatus(charge.charge_id, {
+        charge_status_id: newStatus,
+      });
+    });
+
+    const paymentData = {
+      paymentDate: dayjs(payment.payment_date).format('DD/MM/YYYY'),
+      paymentId: payment.payment_id,
+      studentFullName: `${payment.students.first_name} ${payment.students.last_name}`,
+      paymentAmount: payment.amount,
+      paymentDetails: payment.payment_details.map((detail) => ({
+        collectionName: detail.charges.charge_types.name,
+        paymentDescription: detail.description,
+        paymentAmount: Number(detail.applied_amount),
+      })),
+    };
+
+    const totalStudentChargesAmountApplied = studentCharges.reduce(
+      (acc, charge) => acc + charge.payment_applied_amount,
+      0,
+    );
+
+    if (totalStudentChargesAmountApplied < Number(payment.amount)) {
+      paymentData.paymentDetails.push({
+        collectionName: 'Saldo a Favor',
+        paymentDescription: 'Eliminacion de saldo a favor',
+        paymentAmount:
+          Number(payment.amount) - totalStudentChargesAmountApplied,
+      });
+    }
+
+    await this.sendGridService.sendEmail(
+      payment.students.email,
+      this.configService.get<string>('DELETE_PAYMENT_TEMPLATE_ID'),
+      paymentData,
+    );
+
+    return this.paymentsRepository.removePaymentById(paymentId);
   }
 }

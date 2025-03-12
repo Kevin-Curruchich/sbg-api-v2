@@ -99,6 +99,7 @@ export class ChargesRepository {
               select: {
                 payment_evidence: true,
                 payment_date: true,
+                payment_id: true,
               },
             },
           },
