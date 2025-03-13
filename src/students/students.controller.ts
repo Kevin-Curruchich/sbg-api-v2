@@ -5,14 +5,15 @@ import {
   Body,
   Patch,
   Param,
-  Delete,
   Query,
 } from '@nestjs/common';
 import { StudentService } from './students.service';
 import { CreateStudentDto } from './dto/create-student.dto';
 import { UpdateStudentDto } from './dto/update-student.dto';
-import { PaginationQueryDTO } from 'src/common/dto/pagination-query.dto';
-import { GetStudentsQueryDto } from './dto/get-students-query.dto';
+import {
+  GetStudentsPaginationQueryDto,
+  GetStudentsQueryDto,
+} from './dto/get-students-query.dto';
 
 @Controller('students')
 export class StudentController {
@@ -24,7 +25,10 @@ export class StudentController {
   }
 
   @Get()
-  getAllStudents(@Query() paginationQuery: PaginationQueryDTO) {
+  getAllStudents(
+    @Query()
+    paginationQuery: GetStudentsPaginationQueryDto,
+  ) {
     return this.studentService.getAllStudents(paginationQuery);
   }
 

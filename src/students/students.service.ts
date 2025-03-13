@@ -4,10 +4,12 @@ import { CreateStudentDto } from './dto/create-student.dto';
 import { UpdateStudentDto } from './dto/update-student.dto';
 
 import { StudentStatusConstant } from 'src/common/constants/student-status.constant';
-import { PaginationQueryDTO } from 'src/common/dto/pagination-query.dto';
 
 import * as dayjs from 'dayjs';
-import { GetStudentsQueryDto } from './dto/get-students-query.dto';
+import {
+  GetStudentsPaginationQueryDto,
+  GetStudentsQueryDto,
+} from './dto/get-students-query.dto';
 
 @Injectable()
 export class StudentService {
@@ -24,7 +26,7 @@ export class StudentService {
     await this.studentRepository.createStudent(studentData);
   }
 
-  async getAllStudents(paginationQuery: PaginationQueryDTO) {
+  async getAllStudents(paginationQuery: GetStudentsPaginationQueryDto) {
     return await this.studentRepository.getAllStudentsPaginated(
       paginationQuery,
     );

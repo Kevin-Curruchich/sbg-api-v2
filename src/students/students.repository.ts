@@ -1,13 +1,17 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 
 import { PrismaService } from 'src/prisma/prisma.service';
 import { PrismaCRUD } from 'src/prisma/prisma-crud.service';
 
-import { PaginationQueryDTO } from 'src/common/dto/pagination-query.dto';
 import { GradeLevelStatuses } from 'src/common/constants/grade-levels.constant';
 import { CreateStudentDto } from './dto/create-student.dto';
-import { Prisma } from '@prisma/client';
-import { GetStudentsQueryDto } from './dto/get-students-query.dto';
+import {
+  GetStudentsPaginationQueryDto,
+  GetStudentsQueryDto,
+} from './dto/get-students-query.dto';
+
+import { StudentStatusConstant } from 'src/common/constants/student-status.constant';
 
 @Injectable()
 export class StudentsRepository {
@@ -70,12 +74,35 @@ export class StudentsRepository {
     });
   }
 
-  async getAllStudentsPaginated(paginationQuery: PaginationQueryDTO) {
+  async getAllStudentsPaginated(
+    getStudentsQuery: GetStudentsPaginationQueryDto,
+  ) {
     const { data, total } = await PrismaCRUD.getDataWithOffsetPagination<
       typeof this.prismaService.students
     >(
       this.prismaService.students,
       {
+        where: {
+          student_status_id: getStudentsQuery.student_status_id,
+
+          OR: [
+            {
+              student_grades: {
+                some: {
+                  program_levels: {
+                    program_id: getStudentsQuery.program_id,
+                  },
+                  program_level_id: getStudentsQuery.program_level_id,
+                },
+              },
+            },
+            {
+              student_grades: {
+                none: {},
+              },
+            },
+          ],
+        },
         include: {
           student_types: {
             select: {
@@ -109,19 +136,39 @@ export class StudentsRepository {
         },
       },
       {
-        page: paginationQuery.page,
-        take: paginationQuery.take,
+        page: getStudentsQuery.page,
+        take: getStudentsQuery.take,
       },
     );
     return { data, total };
   }
 
   async getAllStudentsList(studentsQuery: GetStudentsQueryDto) {
+    const {
+      student_status_id = StudentStatusConstant.ACTIVE,
+      student_grade_status_id = GradeLevelStatuses.REGULAR,
+    } = studentsQuery;
+
     return await this.prismaService.students.findMany({
       where: {
         student_types: {
           program_id: studentsQuery.program_id,
           student_type_id: studentsQuery.student_type_id,
+        },
+        student_grades: {
+          some: {
+            program_level_id: studentsQuery.program_level_id,
+            student_grade_status_id,
+          },
+        },
+        AND: {
+          student_status_id,
+          //not student grades empty
+          NOT: {
+            student_grades: {
+              none: {},
+            },
+          },
         },
       },
       select: {
@@ -148,6 +195,7 @@ export class StudentsRepository {
           select: {
             program_levels: {
               select: {
+                program_level_id: true,
                 name: true,
               },
             },
