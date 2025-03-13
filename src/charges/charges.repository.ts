@@ -124,6 +124,33 @@ export class ChargesRepository {
     });
   }
 
+  async getChargesApplyToStudent(query: {
+    student_type_id?: string;
+    program_id?: string;
+    program_level_id?: string;
+  }) {
+    return await this.prismaService.charge_types.findMany({
+      where: {
+        charge_type_applicability: {
+          some: {
+            OR: [
+              {
+                // Specific charges that match the given criteria
+                program_level_id: query.program_level_id,
+                student_type_id: query.student_type_id,
+              },
+              {
+                // Global charges
+                student_type_id: null,
+                program_level_id: null,
+              },
+            ],
+          },
+        },
+      },
+    });
+  }
+
   private async handleError(error: Prisma.PrismaClientKnownRequestError) {
     if (error.code === 'P2002') {
       throw new BadRequestException({

@@ -7,6 +7,7 @@ import { StudentStatusConstant } from 'src/common/constants/student-status.const
 import { PaginationQueryDTO } from 'src/common/dto/pagination-query.dto';
 
 import * as dayjs from 'dayjs';
+import { GetStudentsQueryDto } from './dto/get-students-query.dto';
 
 @Injectable()
 export class StudentService {
@@ -29,15 +30,15 @@ export class StudentService {
     );
   }
 
+  async getAllStudentsList(studentsQuery: GetStudentsQueryDto) {
+    return await this.studentRepository.getAllStudentsList(studentsQuery);
+  }
+
   async getStudentById(id: string) {
     return await this.studentRepository.getStudentById(id);
   }
 
   update(id: number, updateStudentDto: UpdateStudentDto) {
     return `This action updates a #${id} student`;
-  }
-
-  remove(id: number) {
-    return `This action removes a #${id} student`;
   }
 }

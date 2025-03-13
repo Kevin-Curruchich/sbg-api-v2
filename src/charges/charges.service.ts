@@ -1,6 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import * as dayjs from 'dayjs';
 
+import { StudentService } from 'src/students/students.service';
+
 import { CreateChargeDto } from './dto/create-charge.dto';
 import { UpdateChargeDto } from './dto/update-charge.dto';
 
@@ -12,7 +14,10 @@ import StudentChargesQueryDto from './dto/student-charges-query.dto';
 
 @Injectable()
 export class ChargesService {
-  constructor(private readonly chargesRepository: ChargesRepository) {}
+  constructor(
+    private readonly chargesRepository: ChargesRepository,
+    private readonly studentsService: StudentService,
+  ) {}
 
   create(createChargeDto: CreateChargeDto) {
     return 'This action adds a new charge';
@@ -76,6 +81,19 @@ export class ChargesService {
           ),
         })),
       };
+    });
+  }
+
+  async getChargesApplyToStudent(studentId: string) {
+    const student = await this.studentsService.getStudentById(studentId);
+
+    const { student_grades, student_types } = student;
+
+    const lastProgramStudent = student_grades[0];
+
+    return await this.chargesRepository.getChargesApplyToStudent({
+      student_type_id: student_types.student_type_id,
+      program_level_id: lastProgramStudent.program_levels.program_level_id,
     });
   }
 

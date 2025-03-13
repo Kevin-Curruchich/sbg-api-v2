@@ -28,6 +28,11 @@ export class ChargesController {
     return this.chargesService.createChargeForStudent(createChargeDto);
   }
 
+  @Get('apply/student/:studentId')
+  getChargesApplyToStudent(@Param('studentId') studentId: string) {
+    return this.chargesService.getChargesApplyToStudent(studentId);
+  }
+
   @Get('student/:studentId')
   getChargesByStudentId(
     @Param('studentId') studentId: string,

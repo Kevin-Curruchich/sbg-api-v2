@@ -7,6 +7,7 @@ import { PaginationQueryDTO } from 'src/common/dto/pagination-query.dto';
 import { GradeLevelStatuses } from 'src/common/constants/grade-levels.constant';
 import { CreateStudentDto } from './dto/create-student.dto';
 import { Prisma } from '@prisma/client';
+import { GetStudentsQueryDto } from './dto/get-students-query.dto';
 
 @Injectable()
 export class StudentsRepository {
@@ -41,6 +42,30 @@ export class StudentsRepository {
     return await this.prismaService.students.findUnique({
       where: {
         student_id: studentId,
+      },
+      include: {
+        student_types: {
+          select: {
+            student_type_id: true,
+            name: true,
+          },
+        },
+        student_grades: {
+          select: {
+            program_levels: {
+              select: {
+                programs: {
+                  select: {
+                    name: true,
+                    program_id: true,
+                  },
+                },
+                name: true,
+                program_level_id: true,
+              },
+            },
+          },
+        },
       },
     });
   }
@@ -89,6 +114,52 @@ export class StudentsRepository {
       },
     );
     return { data, total };
+  }
+
+  async getAllStudentsList(studentsQuery: GetStudentsQueryDto) {
+    return await this.prismaService.students.findMany({
+      where: {
+        student_types: {
+          program_id: studentsQuery.program_id,
+          student_type_id: studentsQuery.student_type_id,
+        },
+      },
+      select: {
+        student_id: true,
+        first_name: true,
+        last_name: true,
+        email: true,
+        document_id: true,
+        phone_number: true,
+        address: true,
+        student_types: {
+          select: {
+            student_type_id: true,
+            name: true,
+            programs: {
+              select: {
+                program_id: true,
+                name: true,
+              },
+            },
+          },
+        },
+        student_grades: {
+          select: {
+            program_levels: {
+              select: {
+                name: true,
+              },
+            },
+          },
+          orderBy: {
+            program_levels: {
+              created_at: 'desc',
+            },
+          },
+        },
+      },
+    });
   }
 
   private handleError(error: Prisma.PrismaClientKnownRequestError) {
