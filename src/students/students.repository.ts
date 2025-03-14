@@ -13,6 +13,10 @@ import {
 
 import { StudentStatusConstant } from 'src/common/constants/student-status.constant';
 
+interface StudentsFilterOptions {
+  userId?: string;
+}
+
 @Injectable()
 export class StudentsRepository {
   constructor(private readonly prismaService: PrismaService) {}
@@ -206,6 +210,27 @@ export class StudentsRepository {
             },
           },
         },
+      },
+    });
+  }
+
+  async getStudentTypes(options?: StudentsFilterOptions | null) {
+    const where: Prisma.student_typesWhereInput = {};
+
+    if (options && options?.userId) {
+      where['programs'] = {
+        admin_programs: {
+          some: {
+            user_id: options.userId,
+          },
+        },
+      };
+    }
+
+    return await this.prismaService.student_types.findMany({
+      where,
+      include: {
+        programs: true,
       },
     });
   }

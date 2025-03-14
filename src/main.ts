@@ -24,6 +24,14 @@ async function bootstrap() {
     .setTitle('SBG API')
     .setDescription('API for SBG Admin Project')
     .setVersion('1.0')
+    .addBearerAuth({
+      type: 'http',
+      scheme: 'bearer',
+      bearerFormat: 'JWT',
+      name: 'JWT',
+      description: 'Enter JWT token',
+      in: 'header',
+    })
     .build();
 
   const documentFactory = SwaggerModule.createDocument(app, config);

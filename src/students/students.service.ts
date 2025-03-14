@@ -10,6 +10,8 @@ import {
   GetStudentsPaginationQueryDto,
   GetStudentsQueryDto,
 } from './dto/get-students-query.dto';
+import User from 'src/auth/interfaces/user.interface';
+import { ValidRoles } from 'src/auth/interfaces';
 
 @Injectable()
 export class StudentService {
@@ -34,6 +36,18 @@ export class StudentService {
 
   async getAllStudentsList(studentsQuery: GetStudentsQueryDto) {
     return await this.studentRepository.getAllStudentsList(studentsQuery);
+  }
+
+  async getStudentTypes(user: User) {
+    let options = null;
+
+    if (user.role_id === ValidRoles.admin) {
+      options = {
+        userId: user.user_id,
+      };
+    }
+
+    return await this.studentRepository.getStudentTypes(options);
   }
 
   async getStudentById(id: string) {

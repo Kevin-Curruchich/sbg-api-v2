@@ -20,11 +20,9 @@ class SendGridService implements OnModuleInit {
 
     try {
       await sgMail.send(msg);
-      console.log(`Email sent to ${to}`);
+
       return;
     } catch (error) {
-      console.error(`Error sending email to ${to}:`, error);
-
       throw new Error(error);
     }
   }

@@ -7,6 +7,7 @@ import { ConfigModule } from '@nestjs/config';
 import { ProgramsModule } from './programs/programs.module';
 import { ChargesModule } from './charges/charges.module';
 import { PaymentsModule } from './payments/payments.module';
+import { AuthModule } from './auth/auth.module';
 
 @Module({
   controllers: [AppController],
@@ -18,6 +19,7 @@ import { PaymentsModule } from './payments/payments.module';
     ProgramsModule,
     ChargesModule,
     PaymentsModule,
+    AuthModule,
   ],
 })
 export class AppModule {}

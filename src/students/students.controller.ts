@@ -7,6 +7,7 @@ import {
   Param,
   Query,
 } from '@nestjs/common';
+import { ApiBearerAuth } from '@nestjs/swagger';
 import { StudentService } from './students.service';
 import { CreateStudentDto } from './dto/create-student.dto';
 import { UpdateStudentDto } from './dto/update-student.dto';
@@ -15,7 +16,14 @@ import {
   GetStudentsQueryDto,
 } from './dto/get-students-query.dto';
 
+import { Auth } from 'src/auth/decorators/auth.decorator';
+import { ValidRoles } from 'src/auth/interfaces';
+import { GetUser } from 'src/auth/decorators/get-user.decorator';
+import User from 'src/auth/interfaces/user.interface';
+
 @Controller('students')
+@Auth(ValidRoles.admin, ValidRoles.superuser)
+@ApiBearerAuth()
 export class StudentController {
   constructor(private readonly studentService: StudentService) {}
 
@@ -30,6 +38,11 @@ export class StudentController {
     paginationQuery: GetStudentsPaginationQueryDto,
   ) {
     return this.studentService.getAllStudents(paginationQuery);
+  }
+
+  @Get('types')
+  getStudentTypes(@GetUser() user: User) {
+    return this.studentService.getStudentTypes(user);
   }
 
   @Get('list')
