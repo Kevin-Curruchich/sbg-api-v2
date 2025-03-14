@@ -53,7 +53,7 @@ export class AuthService {
       userId: user.user_id,
       email: user.email,
       username: user.username,
-      role: user.role_id,
+      roleId: user.role_id,
       token,
     };
   }
