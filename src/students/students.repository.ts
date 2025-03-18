@@ -88,7 +88,10 @@ export class StudentsRepository {
       {
         where: {
           student_status_id: getStudentsQuery.student_status_id,
-
+          student_types: {
+            program_id: getStudentsQuery.program_id,
+            student_type_id: getStudentsQuery.student_type_id,
+          },
           OR: [
             {
               student_grades: {
