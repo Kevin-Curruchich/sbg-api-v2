@@ -15,6 +15,24 @@ export class PrismaService
         },
       },
     });
+
+    const extendedClient = this.$extends({
+      result: {
+        students: {
+          studentFullName: {
+            needs: {
+              first_name: true,
+              last_name: true,
+            },
+            compute(student) {
+              return `${student.first_name} ${student.last_name}`;
+            },
+          },
+        },
+      },
+    });
+
+    return extendedClient as any;
   }
 
   async onModuleInit() {

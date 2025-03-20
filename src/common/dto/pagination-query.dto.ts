@@ -5,7 +5,7 @@ export class PaginationQueryDTO {
   @IsNumber()
   @Type(() => Number)
   @Min(1)
-  take: number;
+  take: number = 10;
 
   @IsNumber()
   @Type(() => Number)

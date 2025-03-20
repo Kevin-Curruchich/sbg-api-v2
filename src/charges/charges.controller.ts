@@ -12,7 +12,8 @@ import { ChargesService } from './charges.service';
 import { CreateChargeDto } from './dto/create-charge.dto';
 import { UpdateChargeDto } from './dto/update-charge.dto';
 import { CreateForStudentChargeDto } from './dto/create-charge-for-student.dto';
-import StudentChargesQueryDto from './dto/student-charges-query.dto';
+import { StudentChargesQueryDto } from './dto/student-charges-query.dto';
+import { GetChargesCreated } from './dto/get-charges-created.dto';
 
 @Controller('charges')
 export class ChargesController {
@@ -42,8 +43,8 @@ export class ChargesController {
   }
 
   @Get()
-  findAll() {
-    return this.chargesService.findAll();
+  findAll(@Query() query: GetChargesCreated) {
+    return this.chargesService.getAllCharges(query);
   }
 
   @Get('program')

@@ -1,6 +1,6 @@
 import { IsDateString, IsOptional, IsString } from 'class-validator';
 
-export default class StudentChargesQueryDto {
+export class StudentChargesQueryDto {
   @IsOptional()
   @IsString()
   charge_status_id?: string;
@@ -8,4 +8,9 @@ export default class StudentChargesQueryDto {
   @IsOptional()
   @IsDateString()
   due_date?: Date;
+}
+
+export class StudentChargeRepositoryDto extends StudentChargesQueryDto {
+  due_date_start?: Date;
+  due_date_end?: Date;
 }

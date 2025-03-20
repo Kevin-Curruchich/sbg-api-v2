@@ -1,11 +1,89 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from 'src/prisma/prisma.service';
-import StudentChargesQueryDto from './dto/student-charges-query.dto';
+import { StudentChargeRepositoryDto } from './dto/student-charges-query.dto';
+import { GetChargesCreatedRepository } from './dto/get-charges-created.dto';
+import { PrismaCRUD } from 'src/prisma/prisma-crud.service';
 
 @Injectable()
 export class ChargesRepository {
   constructor(private readonly prismaService: PrismaService) {}
+
+  async getAllCharges(query: GetChargesCreatedRepository) {
+    const { search_query, charge_status_id, charge_type_id, due_date } = query;
+
+    const { data, total } = await PrismaCRUD.getDataWithOffsetPagination<
+      typeof this.prismaService.charges
+    >(
+      this.prismaService.charges,
+
+      {
+        where: {
+          //validate if filters are present to filter the data
+          charge_types: {
+            charge_type_id: charge_type_id,
+          },
+          charge_status_id: charge_status_id,
+
+          due_date: due_date
+            ? {
+                gte: query.due_date_start,
+                lte: query.due_date_end,
+              }
+            : undefined,
+          OR: [
+            {
+              students: {
+                first_name: {
+                  contains: search_query,
+                  mode: 'insensitive',
+                },
+              },
+            },
+            {
+              students: {
+                last_name: {
+                  contains: search_query,
+                  mode: 'insensitive',
+                },
+              },
+            },
+          ],
+        },
+
+        include: {
+          charge_types: {
+            select: {
+              charge_type_id: true,
+              name: true,
+              description: true,
+              default_amount: true,
+            },
+          },
+          charge_statuses: {
+            select: {
+              charge_status_id: true,
+              name: true,
+              description: true,
+            },
+          },
+          students: {
+            select: {
+              student_id: true,
+              first_name: true,
+              last_name: true,
+            },
+          },
+        },
+      },
+      {
+        page: query.page,
+        take: query.take,
+      },
+    );
+
+    return { data, total };
+  }
 
   async getChargesByProgramId(programId: string) {
     return await this.prismaService.charge_types.findMany({
@@ -54,7 +132,7 @@ export class ChargesRepository {
 
   async getChargesByStudentId(
     studentId: string,
-    chargesQuery: StudentChargesQueryDto,
+    chargesQuery: StudentChargeRepositoryDto,
   ) {
     const { due_date } = chargesQuery;
 
@@ -64,8 +142,8 @@ export class ChargesRepository {
         charge_status_id: chargesQuery.charge_status_id,
         due_date: due_date
           ? {
-              gte: due_date,
-              lte: new Date(),
+              gte: chargesQuery.due_date_start,
+              lte: chargesQuery.due_date_end,
             }
           : undefined,
       },

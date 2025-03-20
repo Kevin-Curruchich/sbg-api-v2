@@ -10,7 +10,11 @@ import { CreateForStudentChargeDto } from './dto/create-charge-for-student.dto';
 
 import { ChargesRepository } from './charges.repository';
 import { ChargeStatuses } from 'src/common/constants/charge-status.constant';
-import StudentChargesQueryDto from './dto/student-charges-query.dto';
+import {
+  StudentChargeRepositoryDto,
+  StudentChargesQueryDto,
+} from './dto/student-charges-query.dto';
+import { GetChargesCreated } from './dto/get-charges-created.dto';
 
 @Injectable()
 export class ChargesService {
@@ -34,8 +38,26 @@ export class ChargesService {
     return this.chargesRepository.createChargeForStudent(data);
   }
 
-  findAll() {
-    return `This action returns all charges`;
+  async getAllCharges(query: GetChargesCreated) {
+    const queryWithDates = {
+      ...query,
+      //using dayjs get the start and end date of the due date month
+      due_date_start: dayjs(query.due_date).startOf('month').toDate(),
+      due_date_end: dayjs(query.due_date).endOf('month').toDate(),
+    };
+
+    const result = await this.chargesRepository.getAllCharges(queryWithDates);
+
+    const data = result.data.map((charge) => ({
+      ...charge,
+      due_date: dayjs(charge.due_date).format('YYYY-MM-DD'),
+      due_date_formatted: dayjs(charge.due_date).format('DD/MM/YYYY'),
+    }));
+
+    return {
+      data,
+      total: result.total,
+    };
   }
 
   getChargeTypesByProgramId(programId: string) {
@@ -50,10 +72,16 @@ export class ChargesService {
     studentId: string,
     chargesQuery: StudentChargesQueryDto,
   ) {
+    const queryWithDate = {
+      ...chargesQuery,
+      due_date_start: dayjs(chargesQuery.due_date).startOf('month').toDate(),
+      due_date_end: dayjs(chargesQuery.due_date).endOf('month').toDate(),
+    };
+
     const studentChargesAndPayment =
       await this.chargesRepository.getChargesByStudentId(
         studentId,
-        chargesQuery,
+        queryWithDate,
       );
 
     //map the student charge and payment and return by charge the total amount paid and the total amount due for each charge
