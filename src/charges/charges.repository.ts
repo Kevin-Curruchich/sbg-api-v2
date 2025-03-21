@@ -16,7 +16,6 @@ export class ChargesRepository {
       typeof this.prismaService.charges
     >(
       this.prismaService.charges,
-
       {
         where: {
           //validate if filters are present to filter the data
@@ -50,11 +49,9 @@ export class ChargesRepository {
             },
           ],
         },
-
         include: {
           charge_types: {
             select: {
-              charge_type_id: true,
               name: true,
               description: true,
               default_amount: true,
@@ -62,20 +59,37 @@ export class ChargesRepository {
           },
           charge_statuses: {
             select: {
-              charge_status_id: true,
               name: true,
               description: true,
+              charge_status_id: true,
             },
           },
           students: {
             select: {
-              student_id: true,
               first_name: true,
               last_name: true,
+              student_id: true,
+            },
+          },
+          payment_details: {
+            select: {
+              payment_detail_id: true,
+              applied_amount: true,
+              payments: {
+                select: {
+                  payment_evidence: true,
+                  payment_date: true,
+                  payment_id: true,
+                },
+              },
             },
           },
         },
+        orderBy: {
+          created_at: 'desc',
+        },
       },
+
       {
         page: query.page,
         take: query.take,
@@ -105,6 +119,7 @@ export class ChargesRepository {
             current_amount: data.original_amount,
             due_date: data.due_date,
             charge_status_id: data.charge_status_id,
+            description: data.description,
           },
         }),
 

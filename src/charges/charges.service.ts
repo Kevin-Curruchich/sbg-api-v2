@@ -48,11 +48,22 @@ export class ChargesService {
 
     const result = await this.chargesRepository.getAllCharges(queryWithDates);
 
-    const data = result.data.map((charge) => ({
-      ...charge,
-      due_date: dayjs(charge.due_date).format('YYYY-MM-DD'),
-      due_date_formatted: dayjs(charge.due_date).format('DD/MM/YYYY'),
-    }));
+    const data = result.data.map((charge) => {
+      const totalAmountPaid = charge['payment_details'].reduce(
+        (acc, payment) => acc + Number(payment['applied_amount']),
+        0,
+      );
+
+      const totalAmountDue = Number(charge['current_amount']) - totalAmountPaid;
+
+      return {
+        ...charge,
+        totalAmountPaid,
+        totalAmountDue,
+        due_date: dayjs(charge.due_date).format('YYYY-MM-DD'),
+        due_date_formatted: dayjs(charge.due_date).format('DD/MM/YYYY'),
+      };
+    });
 
     return {
       data,

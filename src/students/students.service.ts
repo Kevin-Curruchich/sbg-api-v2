@@ -51,7 +51,9 @@ export class StudentService {
   }
 
   async getStudentById(id: string) {
-    return await this.studentRepository.getStudentById(id);
+    const data = await this.studentRepository.getStudentById(id);
+
+    return data;
   }
 
   update(id: number, updateStudentDto: UpdateStudentDto) {

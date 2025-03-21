@@ -1,4 +1,4 @@
-import { IsDateString, IsNumber, IsString } from 'class-validator';
+import { IsDateString, IsNumber, IsOptional, IsString } from 'class-validator';
 
 export class CreateForStudentChargeDto {
   @IsString()
@@ -12,4 +12,8 @@ export class CreateForStudentChargeDto {
 
   @IsDateString()
   due_date: Date;
+
+  @IsOptional()
+  @IsString()
+  description?: string;
 }
