@@ -4,6 +4,7 @@ import { PrismaService } from 'src/prisma/prisma.service';
 import { StudentChargeRepositoryDto } from './dto/student-charges-query.dto';
 import { GetChargesCreatedRepository } from './dto/get-charges-created.dto';
 import { PrismaCRUD } from 'src/prisma/prisma-crud.service';
+import { ChargeStatuses } from 'src/common/constants/charge-status.constant';
 
 @Injectable()
 export class ChargesRepository {
@@ -69,6 +70,15 @@ export class ChargesRepository {
               first_name: true,
               last_name: true,
               student_id: true,
+              student_grades: {
+                select: {
+                  program_levels: {
+                    select: {
+                      program_id: true,
+                    },
+                  },
+                },
+              },
             },
           },
           payment_details: {
@@ -242,6 +252,119 @@ export class ChargesRepository {
         },
       },
     });
+  }
+
+  async getStudentChargeById(chargeId: string) {
+    return await this.prismaService.charges.findUnique({
+      where: {
+        charge_id: chargeId,
+      },
+      include: {
+        charge_types: {
+          select: {
+            name: true,
+            description: true,
+            default_amount: true,
+          },
+        },
+        charge_statuses: {
+          select: {
+            name: true,
+            description: true,
+            charge_status_id: true,
+          },
+        },
+        students: {
+          select: {
+            first_name: true,
+            last_name: true,
+            student_id: true,
+            student_grades: {
+              select: {
+                program_levels: {
+                  select: {
+                    program_id: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+  }
+
+  async updateStudentCharge(
+    chargeId: string,
+    updateChargeDto: {
+      student_id: string;
+      current_amount: number;
+      due_date?: Date;
+      description?: string;
+      balanceAdjustment: number;
+    },
+  ) {
+    //If due_date and description are not present, update only the current_amount of the charge and the student balance, if the balanceAdjustment is greater than 0, increment the balance, otherwise decrement it. Create a prisma transaction to update the charge and the student balance
+
+    return await this.prismaService.$transaction([
+      this.prismaService.charges.update({
+        where: {
+          charge_id: chargeId,
+        },
+        data: {
+          current_amount: updateChargeDto.current_amount,
+          due_date: updateChargeDto.due_date,
+          description: updateChargeDto.description,
+        },
+      }),
+      this.prismaService.student_balance.update({
+        where: {
+          student_id: updateChargeDto.student_id,
+        },
+        data: {
+          balance: {
+            [updateChargeDto.balanceAdjustment > 0 ? 'increment' : 'decrement']:
+              Math.abs(updateChargeDto.balanceAdjustment),
+          },
+        },
+      }),
+    ]);
+  }
+
+  async totalAmountOwedVsBalance(studentId: string): Promise<{
+    totalAmountOwed: number;
+    studentBalance: number;
+  }> {
+    //Get the total amount owed by the student and the student balance
+    const totalAmountOwedResult = await this.prismaService.charges.aggregate({
+      where: {
+        student_id: studentId,
+        charge_status_id: {
+          in: [ChargeStatuses.PENDING, ChargeStatuses.PARTIAL_PAID],
+        },
+      },
+      _sum: {
+        current_amount: true,
+      },
+    });
+
+    const totalAmountOwed = Number(
+      totalAmountOwedResult._sum.current_amount ?? 0,
+    );
+
+    const studentBalance = await this.prismaService.student_balance.findUnique({
+      where: {
+        student_id: studentId,
+      },
+      select: {
+        balance: true,
+      },
+    });
+
+    return {
+      totalAmountOwed,
+      studentBalance: Number(studentBalance?.balance ?? 0),
+    };
   }
 
   private async handleError(error: Prisma.PrismaClientKnownRequestError) {

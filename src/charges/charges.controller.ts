@@ -10,10 +10,10 @@ import {
 } from '@nestjs/common';
 import { ChargesService } from './charges.service';
 import { CreateChargeDto } from './dto/create-charge.dto';
-import { UpdateChargeDto } from './dto/update-charge.dto';
 import { CreateForStudentChargeDto } from './dto/create-charge-for-student.dto';
 import { StudentChargesQueryDto } from './dto/student-charges-query.dto';
 import { GetChargesCreated } from './dto/get-charges-created.dto';
+import { UpdateStudentChargeDto } from './dto/update-student-charge.dto';
 
 @Controller('charges')
 export class ChargesController {
@@ -32,6 +32,11 @@ export class ChargesController {
   @Get('apply/student/:studentId')
   getChargesApplyToStudent(@Param('studentId') studentId: string) {
     return this.chargesService.getChargesApplyToStudent(studentId);
+  }
+
+  @Get('student/:studentId/outstanding')
+  getStudentOutstanding(@Param('studentId') studentId: string) {
+    return this.chargesService.getStudentOutstanding(studentId);
   }
 
   @Get('student/:studentId')
@@ -54,12 +59,15 @@ export class ChargesController {
 
   @Get(':id')
   findOne(@Param('id') id: string) {
-    return this.chargesService.findOne(+id);
+    return this.chargesService.getStudentChargeById(id);
   }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() updateChargeDto: UpdateChargeDto) {
-    return this.chargesService.update(+id, updateChargeDto);
+  update(
+    @Param('id') chargeId: string,
+    @Body() updateChargeDto: UpdateStudentChargeDto,
+  ) {
+    return this.chargesService.updateChargeStudent(chargeId, updateChargeDto);
   }
 
   @Delete(':id')

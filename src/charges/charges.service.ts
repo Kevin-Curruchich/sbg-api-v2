@@ -2,18 +2,16 @@ import { Injectable } from '@nestjs/common';
 import * as dayjs from 'dayjs';
 
 import { StudentService } from 'src/students/students.service';
+import { formatCurrency } from 'src/common/helpers/currency.helper';
 
 import { CreateChargeDto } from './dto/create-charge.dto';
-import { UpdateChargeDto } from './dto/update-charge.dto';
+import { UpdateStudentChargeDto } from './dto/update-student-charge.dto';
 
 import { CreateForStudentChargeDto } from './dto/create-charge-for-student.dto';
 
 import { ChargesRepository } from './charges.repository';
 import { ChargeStatuses } from 'src/common/constants/charge-status.constant';
-import {
-  StudentChargeRepositoryDto,
-  StudentChargesQueryDto,
-} from './dto/student-charges-query.dto';
+import { StudentChargesQueryDto } from './dto/student-charges-query.dto';
 import { GetChargesCreated } from './dto/get-charges-created.dto';
 
 @Injectable()
@@ -56,10 +54,13 @@ export class ChargesService {
 
       const totalAmountDue = Number(charge['current_amount']) - totalAmountPaid;
 
+      const totalAmountPaidFormatted = formatCurrency(totalAmountPaid);
+      const totalAmountDueFormatted = formatCurrency(totalAmountDue);
+
       return {
         ...charge,
-        totalAmountPaid,
-        totalAmountDue,
+        totalAmountPaid: totalAmountPaidFormatted,
+        totalAmountDue: totalAmountDueFormatted,
         due_date: dayjs(charge.due_date).format('YYYY-MM-DD'),
         due_date_formatted: dayjs(charge.due_date).format('DD/MM/YYYY'),
       };
@@ -136,12 +137,47 @@ export class ChargesService {
     });
   }
 
-  findOne(id: number) {
+  getStudentChargeById(id: string) {
     return `This action returns a #${id} charge`;
   }
 
-  update(id: number, updateChargeDto: UpdateChargeDto) {
-    return `This action updates a #${id} charge`;
+  async updateChargeStudent(
+    chargeId: string,
+    updateChargeDto: UpdateStudentChargeDto,
+  ) {
+    const { original_amount: new_amount } = updateChargeDto;
+
+    const originalCharge =
+      await this.chargesRepository.getStudentChargeById(chargeId);
+
+    const differenceAmount =
+      Number(new_amount) - Number(originalCharge.current_amount);
+
+    const data = {
+      student_id: originalCharge.student_id,
+      current_amount: new_amount,
+      due_date: dayjs(updateChargeDto.due_date).toDate(),
+      description: updateChargeDto.description,
+      balanceAdjustment: differenceAmount,
+    };
+
+    return this.chargesRepository.updateStudentCharge(chargeId, data);
+  }
+
+  async getStudentOutstanding(studentId: string) {
+    const { totalAmountOwed, studentBalance } =
+      await this.chargesRepository.totalAmountOwedVsBalance(studentId);
+
+    const studentTotalOutstanding = totalAmountOwed - studentBalance;
+
+    return {
+      totalAmountOwed,
+      studentBalance,
+      studentTotalOutstanding,
+      totalAmountOwedFormatted: formatCurrency(totalAmountOwed),
+      studentBalanceFormatted: formatCurrency(studentBalance),
+      studentTotalOutstandingFormatted: formatCurrency(studentTotalOutstanding),
+    };
   }
 
   remove(id: number) {
