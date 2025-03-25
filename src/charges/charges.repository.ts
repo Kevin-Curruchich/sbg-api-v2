@@ -340,7 +340,7 @@ export class ChargesRepository {
       where: {
         student_id: studentId,
         charge_status_id: {
-          in: [ChargeStatuses.PENDING, ChargeStatuses.PARTIAL_PAID],
+          in: [ChargeStatuses.PENDING],
         },
       },
       _sum: {

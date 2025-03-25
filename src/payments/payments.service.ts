@@ -51,7 +51,7 @@ export class PaymentsService {
         });
       } else {
         await this.chargesService.updateChargeStatus(charge.charge_id, {
-          charge_status_id: ChargeStatuses.PARTIAL_PAID,
+          charge_status_id: ChargeStatuses.PENDING,
         });
       }
     });
@@ -118,7 +118,7 @@ export class PaymentsService {
       if (totalAmountPaidByCharge === 0) {
         newStatus = ChargeStatuses.PENDING;
       } else if (totalAmountPaidByCharge < Number(charge.current_amount)) {
-        newStatus = ChargeStatuses.PARTIAL_PAID;
+        newStatus = ChargeStatuses.PENDING;
       } else if (totalAmountPaidByCharge === Number(charge.current_amount)) {
         newStatus = ChargeStatuses.TOTAL_PAID;
       }
