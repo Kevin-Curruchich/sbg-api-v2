@@ -57,11 +57,6 @@ export class ChargesController {
     return this.chargesService.getChargeTypesByProgramId(programId);
   }
 
-  @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.chargesService.getStudentChargeById(id);
-  }
-
   @Patch(':id')
   update(
     @Param('id') chargeId: string,

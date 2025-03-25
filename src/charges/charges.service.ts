@@ -137,10 +137,6 @@ export class ChargesService {
     });
   }
 
-  getStudentChargeById(id: string) {
-    return `This action returns a #${id} charge`;
-  }
-
   async updateChargeStudent(
     chargeId: string,
     updateChargeDto: UpdateStudentChargeDto,

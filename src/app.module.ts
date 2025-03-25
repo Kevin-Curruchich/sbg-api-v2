@@ -8,6 +8,7 @@ import { ProgramsModule } from './programs/programs.module';
 import { ChargesModule } from './charges/charges.module';
 import { PaymentsModule } from './payments/payments.module';
 import { AuthModule } from './auth/auth.module';
+import { PaymentAssistantModule } from './payment-assistant/payment-assistant.module';
 
 @Module({
   controllers: [AppController],
@@ -20,6 +21,7 @@ import { AuthModule } from './auth/auth.module';
     ChargesModule,
     PaymentsModule,
     AuthModule,
+    PaymentAssistantModule,
   ],
 })
 export class AppModule {}
