@@ -13,6 +13,7 @@ import { ChargesRepository } from './charges.repository';
 import { ChargeStatuses } from 'src/common/constants/charge-status.constant';
 import { StudentChargesQueryDto } from './dto/student-charges-query.dto';
 import { GetChargesCreated } from './dto/get-charges-created.dto';
+import User from 'src/auth/interfaces/user.interface';
 
 @Injectable()
 export class ChargesService {
@@ -36,7 +37,9 @@ export class ChargesService {
     return this.chargesRepository.createChargeForStudent(data);
   }
 
-  async getAllCharges(query: GetChargesCreated) {
+  async getAllCharges(query: GetChargesCreated, user: User) {
+    const programs = user.admin_programs.map((program) => program.program_id);
+
     const queryWithDates = {
       ...query,
       //using dayjs get the start and end date of the due date month
@@ -44,7 +47,10 @@ export class ChargesService {
       due_date_end: dayjs(query.due_date).endOf('month').toDate(),
     };
 
-    const result = await this.chargesRepository.getAllCharges(queryWithDates);
+    const result = await this.chargesRepository.getAllCharges(
+      queryWithDates,
+      programs,
+    );
 
     const data = result.data.map((charge) => {
       const totalAmountPaid = charge['payment_details'].reduce(

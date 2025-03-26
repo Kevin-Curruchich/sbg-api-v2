@@ -10,46 +10,66 @@ import { ChargeStatuses } from 'src/common/constants/charge-status.constant';
 export class ChargesRepository {
   constructor(private readonly prismaService: PrismaService) {}
 
-  async getAllCharges(query: GetChargesCreatedRepository) {
+  async getAllCharges(query: GetChargesCreatedRepository, programs: string[]) {
     const { search_query, charge_status_id, charge_type_id, due_date } = query;
+
+    const whereCharges: Prisma.chargesWhereInput = {
+      //validate if filters are present to filter the data
+      charge_types: {
+        charge_type_id: charge_type_id,
+      },
+      charge_status_id: charge_status_id,
+
+      due_date: due_date
+        ? {
+            gte: query.due_date_start,
+            lte: query.due_date_end,
+          }
+        : undefined,
+      OR: [
+        {
+          students: {
+            first_name: {
+              contains: search_query,
+              mode: 'insensitive',
+            },
+          },
+        },
+        {
+          students: {
+            last_name: {
+              contains: search_query,
+              mode: 'insensitive',
+            },
+          },
+        },
+      ],
+    };
+
+    if (programs.length > 0) {
+      whereCharges.AND = [
+        {
+          students: {
+            student_grades: {
+              some: {
+                program_levels: {
+                  program_id: {
+                    in: programs,
+                  },
+                },
+              },
+            },
+          },
+        },
+      ];
+    }
 
     const { data, total } = await PrismaCRUD.getDataWithOffsetPagination<
       typeof this.prismaService.charges
     >(
       this.prismaService.charges,
       {
-        where: {
-          //validate if filters are present to filter the data
-          charge_types: {
-            charge_type_id: charge_type_id,
-          },
-          charge_status_id: charge_status_id,
-
-          due_date: due_date
-            ? {
-                gte: query.due_date_start,
-                lte: query.due_date_end,
-              }
-            : undefined,
-          OR: [
-            {
-              students: {
-                first_name: {
-                  contains: search_query,
-                  mode: 'insensitive',
-                },
-              },
-            },
-            {
-              students: {
-                last_name: {
-                  contains: search_query,
-                  mode: 'insensitive',
-                },
-              },
-            },
-          ],
-        },
+        where: whereCharges,
         include: {
           charge_types: {
             select: {

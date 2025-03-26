@@ -12,6 +12,8 @@ import SendGridService from '../common/sendgrid.service';
 import { CreateStudentPaymentDto } from './dto/create-student-payment.dto';
 
 import { PaymentsRepository } from './payments.repository';
+import { GetStudentPaymentsDto } from './dto/get-student-payments.dto';
+import User from 'src/auth/interfaces/user.interface';
 
 @Injectable()
 export class PaymentsService {
@@ -82,12 +84,14 @@ export class PaymentsService {
     return paymentCreated;
   }
 
-  findAll() {
-    return `This action returns all payments`;
+  async getAllPayments(queryParams: GetStudentPaymentsDto, user: User) {
+    const programs = user.admin_programs.map((program) => program.program_id);
+
+    return await this.paymentsRepository.getAllPayments(queryParams, programs);
   }
 
-  findOne(id: number) {
-    return `This action returns a #${id} payment`;
+  getPaymentById(id: string) {
+    return this.paymentsRepository.getPaymentById(id);
   }
 
   async removePaymentById(paymentId: string) {

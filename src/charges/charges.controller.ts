@@ -8,14 +8,23 @@ import {
   Delete,
   Query,
 } from '@nestjs/common';
+import { ApiBearerAuth } from '@nestjs/swagger';
+
+import { Auth } from 'src/auth/decorators/auth.decorator';
+import { ValidRoles } from 'src/auth/interfaces';
+
 import { ChargesService } from './charges.service';
 import { CreateChargeDto } from './dto/create-charge.dto';
 import { CreateForStudentChargeDto } from './dto/create-charge-for-student.dto';
 import { StudentChargesQueryDto } from './dto/student-charges-query.dto';
 import { GetChargesCreated } from './dto/get-charges-created.dto';
 import { UpdateStudentChargeDto } from './dto/update-student-charge.dto';
+import { GetUser } from 'src/auth/decorators/get-user.decorator';
+import User from 'src/auth/interfaces/user.interface';
 
 @Controller('charges')
+@Auth(ValidRoles.admin, ValidRoles.superuser)
+@ApiBearerAuth()
 export class ChargesController {
   constructor(private readonly chargesService: ChargesService) {}
 
@@ -48,8 +57,8 @@ export class ChargesController {
   }
 
   @Get()
-  findAll(@Query() query: GetChargesCreated) {
-    return this.chargesService.getAllCharges(query);
+  findAll(@Query() query: GetChargesCreated, @GetUser() user: User) {
+    return this.chargesService.getAllCharges(query, user);
   }
 
   @Get('program')

@@ -3,14 +3,24 @@ import {
   Get,
   Post,
   Body,
-  Patch,
   Param,
   Delete,
+  Query,
 } from '@nestjs/common';
+import { ApiBearerAuth } from '@nestjs/swagger';
+import { Auth } from 'src/auth/decorators/auth.decorator';
+
+import User from 'src/auth/interfaces/user.interface';
+import { GetUser } from 'src/auth/decorators/get-user.decorator';
+import { ValidRoles } from 'src/auth/interfaces';
 import { PaymentsService } from './payments.service';
+
 import { CreateStudentPaymentDto } from './dto/create-student-payment.dto';
+import { GetStudentPaymentsDto } from './dto/get-student-payments.dto';
 
 @Controller('payments')
+@Auth(ValidRoles.admin, ValidRoles.superuser)
+@ApiBearerAuth()
 export class PaymentsController {
   constructor(private readonly paymentsService: PaymentsService) {}
 
@@ -20,13 +30,16 @@ export class PaymentsController {
   }
 
   @Get()
-  findAll() {
-    return this.paymentsService.findAll();
+  getAllPayments(
+    @Query() queryParams: GetStudentPaymentsDto,
+    @GetUser() user: User,
+  ) {
+    return this.paymentsService.getAllPayments(queryParams, user);
   }
 
-  @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.paymentsService.findOne(+id);
+  @Get(':paymentId')
+  findOne(@Param('paymentId') paymentId: string) {
+    return this.paymentsService.getPaymentById(paymentId);
   }
 
   @Delete(':id')
