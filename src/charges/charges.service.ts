@@ -104,6 +104,8 @@ export class ChargesService {
       );
 
       const totalAmountDue = Number(charge.current_amount) - totalAmountPaid;
+      const totalAmountDueFormatted = formatCurrency(totalAmountDue);
+      const totalAmountPaidFormatted = formatCurrency(totalAmountPaid);
 
       return {
         ...charge,
@@ -111,6 +113,8 @@ export class ChargesService {
         due_date_formatted: dayjs(charge.due_date).format('DD/MM/YYYY'),
         totalAmountPaid,
         totalAmountDue,
+        totalAmountPaidFormatted,
+        totalAmountDueFormatted,
         payment_details: charge.payment_details.map((payment) => ({
           ...payment,
           payment_date: dayjs(payment.payments.payment_date).format(

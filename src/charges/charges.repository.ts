@@ -179,6 +179,7 @@ export class ChargesRepository {
         due_date: true,
         created_at: true,
         updated_at: true,
+        description: true,
         charge_types: {
           select: {
             charge_type_id: true,

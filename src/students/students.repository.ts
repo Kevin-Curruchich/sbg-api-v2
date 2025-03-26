@@ -80,36 +80,47 @@ export class StudentsRepository {
 
   async getAllStudentsPaginated(
     getStudentsQuery: GetStudentsPaginationQueryDto,
+    programs: string[] | null,
   ) {
+    const { program_id, program_level_id } = getStudentsQuery;
+
+    const whereClause: Prisma.studentsWhereInput = {
+      student_status_id: getStudentsQuery.student_status_id,
+      student_types: {
+        program_id: program_id || undefined,
+        student_type_id: getStudentsQuery.student_type_id,
+      },
+      OR: [
+        {
+          student_grades: {
+            some: {
+              program_level_id: program_level_id || undefined,
+            },
+          },
+        },
+        {
+          student_grades: {},
+        },
+      ],
+    };
+
+    if (!program_id && !program_level_id) {
+      whereClause.student_types.program_id = undefined;
+      if (programs.length > 0) {
+        whereClause.student_types.programs = {
+          program_id: {
+            in: programs,
+          },
+        };
+      }
+    }
+
     const { data, total } = await PrismaCRUD.getDataWithOffsetPagination<
       typeof this.prismaService.students
     >(
       this.prismaService.students,
       {
-        where: {
-          student_status_id: getStudentsQuery.student_status_id,
-          student_types: {
-            program_id: getStudentsQuery.program_id,
-            student_type_id: getStudentsQuery.student_type_id,
-          },
-          OR: [
-            {
-              student_grades: {
-                some: {
-                  program_levels: {
-                    program_id: getStudentsQuery.program_id,
-                  },
-                  program_level_id: getStudentsQuery.program_level_id,
-                },
-              },
-            },
-            {
-              student_grades: {
-                none: {},
-              },
-            },
-          ],
-        },
+        where: whereClause,
         include: {
           student_types: {
             select: {
@@ -150,34 +161,51 @@ export class StudentsRepository {
     return { data, total };
   }
 
-  async getAllStudentsList(studentsQuery: GetStudentsQueryDto) {
+  async getAllStudentsList(
+    studentsQuery: GetStudentsQueryDto,
+    programs: string[],
+  ) {
     const {
       student_status_id = StudentStatusConstant.ACTIVE,
       student_grade_status_id = GradeLevelStatuses.REGULAR,
     } = studentsQuery;
 
-    return await this.prismaService.students.findMany({
-      where: {
-        student_types: {
-          program_id: studentsQuery.program_id,
-          student_type_id: studentsQuery.student_type_id,
+    const whereClause: Prisma.studentsWhereInput = {
+      student_status_id,
+      student_types: {
+        program_id: studentsQuery.program_id,
+        student_type_id: studentsQuery.student_type_id,
+      },
+      student_grades: {
+        some: {
+          program_level_id: studentsQuery.program_level_id,
+          student_grade_status_id,
         },
-        student_grades: {
-          some: {
-            program_level_id: studentsQuery.program_level_id,
-            student_grade_status_id,
-          },
-        },
-        AND: {
-          student_status_id,
-          //not student grades empty
-          NOT: {
-            student_grades: {
-              none: {},
-            },
+      },
+      AND: {
+        student_status_id,
+        //not student grades empty
+        NOT: {
+          student_grades: {
+            none: {},
           },
         },
       },
+    };
+
+    if (!studentsQuery.program_id && !studentsQuery.program_level_id) {
+      whereClause.student_types.program_id = undefined;
+      if (programs.length > 0) {
+        whereClause.student_types.programs = {
+          program_id: {
+            in: programs,
+          },
+        };
+      }
+    }
+
+    return await this.prismaService.students.findMany({
+      where: whereClause,
       select: {
         student_id: true,
         first_name: true,

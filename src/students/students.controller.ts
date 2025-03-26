@@ -36,8 +36,9 @@ export class StudentController {
   getAllStudents(
     @Query()
     paginationQuery: GetStudentsPaginationQueryDto,
+    @GetUser() user: User,
   ) {
-    return this.studentService.getAllStudents(paginationQuery);
+    return this.studentService.getAllStudents(paginationQuery, user);
   }
 
   @Get('types')
@@ -46,8 +47,11 @@ export class StudentController {
   }
 
   @Get('list')
-  getStudentList(@Query() getStudentsQueryDto: GetStudentsQueryDto) {
-    return this.studentService.getAllStudentsList(getStudentsQueryDto);
+  getStudentList(
+    @Query() getStudentsQueryDto: GetStudentsQueryDto,
+    @GetUser() user: User,
+  ) {
+    return this.studentService.getAllStudentsList(getStudentsQueryDto, user);
   }
 
   @Get(':id')

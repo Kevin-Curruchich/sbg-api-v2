@@ -28,14 +28,31 @@ export class StudentService {
     await this.studentRepository.createStudent(studentData);
   }
 
-  async getAllStudents(paginationQuery: GetStudentsPaginationQueryDto) {
+  async getAllStudents(
+    paginationQuery: GetStudentsPaginationQueryDto,
+    user: User,
+  ) {
+    const { admin_programs } = user;
+
+    const programs = admin_programs.map((program) => program.program_id);
+
+    console.log({ programs });
+
     return await this.studentRepository.getAllStudentsPaginated(
       paginationQuery,
+      programs,
     );
   }
 
-  async getAllStudentsList(studentsQuery: GetStudentsQueryDto) {
-    return await this.studentRepository.getAllStudentsList(studentsQuery);
+  async getAllStudentsList(studentsQuery: GetStudentsQueryDto, user: User) {
+    const { admin_programs } = user;
+
+    const programs = admin_programs.map((program) => program.program_id);
+
+    return await this.studentRepository.getAllStudentsList(
+      studentsQuery,
+      programs,
+    );
   }
 
   async getStudentTypes(user: User) {

@@ -26,6 +26,13 @@ export class AuthRepository {
       where: {
         user_id: userId,
       },
+      include: {
+        admin_programs: {
+          select: {
+            program_id: true,
+          },
+        },
+      },
     });
   }
 
@@ -33,6 +40,13 @@ export class AuthRepository {
     return await this.prismaService.users.findUnique({
       where: {
         email,
+      },
+      include: {
+        admin_programs: {
+          select: {
+            program_id: true,
+          },
+        },
       },
     });
   }

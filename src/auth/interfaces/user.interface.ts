@@ -7,4 +7,5 @@ export default interface User {
   username: string;
   password_hash: string;
   role_id: string | null;
+  admin_programs: { program_id: string }[];
 }
