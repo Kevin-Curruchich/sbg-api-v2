@@ -47,35 +47,43 @@ export class StudentsRepository {
   }
 
   async getStudentById(studentId: string) {
-    return await this.prismaService.students.findUnique({
-      where: {
-        student_id: studentId,
-      },
-      include: {
-        student_types: {
-          select: {
-            student_type_id: true,
-            name: true,
-          },
+    try {
+      return await this.prismaService.students.findUnique({
+        where: {
+          student_id: studentId,
         },
-        student_grades: {
-          select: {
-            program_levels: {
-              select: {
-                programs: {
-                  select: {
-                    name: true,
-                    program_id: true,
+        include: {
+          student_types: {
+            select: {
+              student_type_id: true,
+              name: true,
+            },
+          },
+          student_grades: {
+            select: {
+              program_levels: {
+                select: {
+                  programs: {
+                    select: {
+                      name: true,
+                      program_id: true,
+                    },
                   },
+                  name: true,
+                  program_level_id: true,
+                  created_at: true,
                 },
-                name: true,
-                program_level_id: true,
               },
+            },
+            orderBy: {
+              created_at: 'desc',
             },
           },
         },
-      },
-    });
+      });
+    } catch (error) {
+      this.handleError(error);
+    }
   }
 
   async getAllStudentsPaginated(

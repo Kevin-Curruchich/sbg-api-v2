@@ -352,7 +352,7 @@ export class ChargesRepository {
     ]);
   }
 
-  async totalAmountOwedVsBalance(studentId: string): Promise<{
+  async totalAmountOwedAndBalance(studentId: string): Promise<{
     totalAmountOwed: number;
     studentBalance: number;
   }> {
@@ -386,6 +386,10 @@ export class ChargesRepository {
       totalAmountOwed,
       studentBalance: Number(studentBalance?.balance ?? 0),
     };
+  }
+
+  async getChargeStatuses() {
+    return await this.prismaService.charge_statuses.findMany();
   }
 
   private async handleError(error: Prisma.PrismaClientKnownRequestError) {

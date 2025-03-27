@@ -6,6 +6,8 @@ import { UpdateStudentDto } from './dto/update-student.dto';
 import { StudentStatusConstant } from 'src/common/constants/student-status.constant';
 
 import * as dayjs from 'dayjs';
+//days
+
 import {
   GetStudentsPaginationQueryDto,
   GetStudentsQueryDto,
@@ -35,8 +37,6 @@ export class StudentService {
     const { admin_programs } = user;
 
     const programs = admin_programs.map((program) => program.program_id);
-
-    console.log({ programs });
 
     return await this.studentRepository.getAllStudentsPaginated(
       paginationQuery,
@@ -68,7 +68,42 @@ export class StudentService {
   }
 
   async getStudentById(id: string) {
-    const data = await this.studentRepository.getStudentById(id);
+    const studentData = await this.studentRepository.getStudentById(id);
+
+    const groupedGrades = Object.values(
+      studentData.student_grades.reduce((acc, grade) => {
+        const program = grade.program_levels.programs;
+        if (!program) return acc;
+
+        const programId = program.program_id;
+        if (!acc[programId]) {
+          acc[programId] = {
+            program_id: programId,
+            program_name: program.name,
+            grades: [],
+          };
+        }
+
+        acc[programId].grades.push({
+          program_level_id: grade.program_levels.program_level_id,
+          program_level_name: grade.program_levels.name,
+          created_at: dayjs(grade.program_levels.created_at).format(
+            'MMMM DD, YYYY',
+          ),
+        });
+
+        return acc;
+      }, {}),
+    );
+
+    const data = {
+      ...studentData,
+      birthday: dayjs(studentData.birthday).format('YYYY-MM-DD'),
+      birthdayFormatted: dayjs(studentData.birthday).format('MMMM DD, YYYY'),
+      groupedGrades,
+    };
+
+    delete data.student_grades;
 
     return data;
   }

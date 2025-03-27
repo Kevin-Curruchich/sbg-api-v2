@@ -66,6 +66,11 @@ export class ChargesController {
     return this.chargesService.getChargeTypesByProgramId(programId);
   }
 
+  @Get('statuses')
+  getChargeStatuses() {
+    return this.chargesService.getChargeStatuses();
+  }
+
   @Patch(':id')
   update(
     @Param('id') chargeId: string,

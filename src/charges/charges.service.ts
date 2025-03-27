@@ -82,6 +82,10 @@ export class ChargesService {
     return this.chargesRepository.getChargesByProgramId(programId);
   }
 
+  getChargeStatuses() {
+    return this.chargesRepository.getChargeStatuses();
+  }
+
   updateChargeStatus(chargeId: string, data: { charge_status_id: string }) {
     return this.chargesRepository.updateChargeStatus(chargeId, data);
   }
@@ -172,7 +176,7 @@ export class ChargesService {
 
   async getStudentOutstanding(studentId: string) {
     const { totalAmountOwed, studentBalance } =
-      await this.chargesRepository.totalAmountOwedVsBalance(studentId);
+      await this.chargesRepository.totalAmountOwedAndBalance(studentId);
 
     const studentTotalOutstanding = totalAmountOwed - studentBalance;
 
