@@ -72,8 +72,10 @@ export class PaymentsRepository {
   }
 
   async getAllPayments(queryParams: GetStudentPaymentsDto, programs: string[]) {
-    const where: Prisma.paymentsWhereInput = {
-      students: {
+    const where: Prisma.paymentsWhereInput = {};
+
+    if (queryParams.searchQuery) {
+      where.students = {
         OR: [
           {
             first_name: {
@@ -88,14 +90,14 @@ export class PaymentsRepository {
             },
           },
         ],
-      },
-    };
+      };
+    }
 
     if (programs.length > 0) {
-      where.students.AND = [
-        {
+      where.AND = {
+        students: {
           student_grades: {
-            some: {
+            every: {
               program_levels: {
                 program_id: {
                   in: programs,
@@ -104,7 +106,7 @@ export class PaymentsRepository {
             },
           },
         },
-      ];
+      };
     }
 
     const { data, total } = await PrismaCRUD.getDataWithOffsetPagination<
