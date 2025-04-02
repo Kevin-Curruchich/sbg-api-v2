@@ -3,10 +3,10 @@ import {
   Get,
   Post,
   Body,
-  Patch,
   Param,
   Delete,
   Query,
+  Put,
 } from '@nestjs/common';
 import { ApiBearerAuth } from '@nestjs/swagger';
 
@@ -43,9 +43,9 @@ export class ChargesController {
     return this.chargesService.getChargesApplyToStudent(studentId);
   }
 
-  @Get('student/:studentId/outstanding')
-  getStudentOutstanding(@Param('studentId') studentId: string) {
-    return this.chargesService.getStudentOutstanding(studentId);
+  @Get('student/:studentId/balance')
+  getStudentBalance(@Param('studentId') studentId: string) {
+    return this.chargesService.getStudentBalance(studentId);
   }
 
   @Get('student/:studentId')
@@ -71,7 +71,7 @@ export class ChargesController {
     return this.chargesService.getChargeStatuses();
   }
 
-  @Patch(':id')
+  @Put('/:id/student')
   update(
     @Param('id') chargeId: string,
     @Body() updateChargeDto: UpdateStudentChargeDto,

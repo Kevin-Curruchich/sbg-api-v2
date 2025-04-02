@@ -2,7 +2,6 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateStudentPaymentDto } from './dto/create-student-payment.dto';
 import { GetStudentPaymentsDto } from './dto/get-student-payments.dto';
-import { PrismaCRUD } from 'src/prisma/prisma-crud.service';
 import { Prisma } from '@prisma/client';
 
 @Injectable()
@@ -10,10 +9,12 @@ export class PaymentsRepository {
   constructor(private readonly prismaService: PrismaService) {}
 
   async createStudentPayment(data: CreateStudentPaymentDto) {
+    const { is_from_credit_balance } = data;
+
     try {
       //create a new prisma transaction, create a new payment, and create the payment details for finish to update the student balance
-      const payment = await this.prismaService.$transaction([
-        this.prismaService.payments.create({
+      const payment = await this.prismaService.$transaction(async (prisma) => {
+        const createdPayment = prisma.payments.create({
           data: {
             student_id: data.student_id,
             payment_method_id: data.payment_method_id,
@@ -44,18 +45,23 @@ export class PaymentsRepository {
               },
             },
           },
-        }),
-        this.prismaService.student_balance.update({
-          where: {
-            student_id: data.student_id,
-          },
-          data: {
-            balance: {
-              decrement: data.amount,
+        });
+
+        if (!is_from_credit_balance) {
+          await prisma.student_balance.update({
+            where: {
+              student_id: data.student_id,
             },
-          },
-        }),
-      ]);
+            data: {
+              balance: {
+                decrement: data.amount,
+              },
+            },
+          });
+        }
+
+        return createdPayment;
+      });
 
       return payment;
     } catch (error) {
@@ -109,34 +115,29 @@ export class PaymentsRepository {
       };
     }
 
-    const { data, total } = await PrismaCRUD.getDataWithOffsetPagination<
-      typeof this.prismaService.payments
-    >(
-      this.prismaService.payments,
-      {
-        where,
-        include: {
-          students: {
-            select: {
-              student_id: true,
-              first_name: true,
-              last_name: true,
-              email: true,
-            },
+    const payments = await this.prismaService.payments.findMany({
+      where,
+      include: {
+        students: {
+          select: {
+            student_id: true,
+            first_name: true,
+            last_name: true,
+            email: true,
           },
-          payment_details: {
-            select: {
-              applied_amount: true,
-              description: true,
-              charges: {
-                select: {
-                  charge_id: true,
-                  current_amount: true,
-                  charge_types: {
-                    select: {
-                      name: true,
-                      charge_type_id: true,
-                    },
+        },
+        payment_details: {
+          select: {
+            applied_amount: true,
+            description: true,
+            charges: {
+              select: {
+                charge_id: true,
+                current_amount: true,
+                charge_types: {
+                  select: {
+                    name: true,
+                    charge_type_id: true,
                   },
                 },
               },
@@ -144,13 +145,16 @@ export class PaymentsRepository {
           },
         },
       },
-      {
-        page: queryParams.page,
-        take: queryParams.take,
+      orderBy: {
+        created_at: 'desc',
       },
-    );
+      skip: (queryParams.page - 1) * queryParams.take,
+      take: queryParams.take,
+    });
 
-    return { data, total };
+    const total = await this.prismaService.payments.count({ where });
+
+    return { data: payments, total };
   }
 
   async getPaymentById(

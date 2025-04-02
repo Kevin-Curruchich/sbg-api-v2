@@ -1,8 +1,12 @@
 import { Injectable } from '@nestjs/common';
 import * as dayjs from 'dayjs';
+import 'dayjs/locale/es'; // Import Spanish locale
+
+dayjs.locale('es');
 
 import { StudentService } from 'src/students/students.service';
 import { formatCurrency } from 'src/common/helpers/currency.helper';
+import User from 'src/auth/interfaces/user.interface';
 
 import { CreateChargeDto } from './dto/create-charge.dto';
 import { UpdateStudentChargeDto } from './dto/update-student-charge.dto';
@@ -13,7 +17,6 @@ import { ChargesRepository } from './charges.repository';
 import { ChargeStatuses } from 'src/common/constants/charge-status.constant';
 import { StudentChargesQueryDto } from './dto/student-charges-query.dto';
 import { GetChargesCreated } from './dto/get-charges-created.dto';
-import User from 'src/auth/interfaces/user.interface';
 
 @Injectable()
 export class ChargesService {
@@ -65,8 +68,13 @@ export class ChargesService {
 
       return {
         ...charge,
-        totalAmountPaid: totalAmountPaidFormatted,
-        totalAmountDue: totalAmountDueFormatted,
+        totalAmountPaidFormatted,
+        totalAmountDueFormatted,
+        totalAmountPaid: totalAmountPaid,
+        totalAmountDue: totalAmountDue,
+        currentAmountFormatted: formatCurrency(
+          Number(charge['current_amount']),
+        ),
         due_date: dayjs(charge.due_date).format('YYYY-MM-DD'),
         due_date_formatted: dayjs(charge.due_date).format('DD/MM/YYYY'),
       };
@@ -119,14 +127,22 @@ export class ChargesService {
 
       return {
         ...charge,
+        charge_types: {
+          ...charge.charge_types,
+          name: `${charge.charge_types.name} | ${dayjs(charge.due_date).format('MMMM YY')}`,
+        },
         due_date: dayjs(charge.due_date).format('YYYY-MM-DD'),
         due_date_formatted: dayjs(charge.due_date).format('DD/MM/YYYY'),
         totalAmountPaid,
         totalAmountDue,
         totalAmountPaidFormatted,
         totalAmountDueFormatted,
+        current_amount_formatted: formatCurrency(Number(charge.current_amount)),
         payment_details: charge.payment_details.map((payment) => ({
           ...payment,
+          applied_amount_formatted: formatCurrency(
+            Number(payment.applied_amount),
+          ),
           payment_date: dayjs(payment.payments.payment_date).format(
             'YYYY-MM-DD',
           ),
@@ -139,11 +155,13 @@ export class ChargesService {
   }
 
   async getChargesApplyToStudent(studentId: string) {
-    const student = await this.studentsService.getStudentById(studentId);
+    const student = await this.studentsService.getStudentGeneralInfo(studentId);
+    const studentGrade =
+      await this.studentsService.getLastStudentGrade(studentId);
 
-    const { student_grades, student_types } = student;
+    const { student_types } = student;
 
-    const lastProgramStudent = student_grades[0];
+    const lastProgramStudent = studentGrade;
 
     return await this.chargesRepository.getChargesApplyToStudent({
       student_type_id: student_types.student_type_id,
@@ -160,8 +178,19 @@ export class ChargesService {
     const originalCharge =
       await this.chargesRepository.getStudentChargeById(chargeId);
 
+    const originalChargePayed = originalCharge.payment_details.reduce(
+      (acc, payment) => acc + Number(payment.applied_amount),
+      0,
+    );
+
     const differenceAmount =
       Number(new_amount) - Number(originalCharge.current_amount);
+
+    let amountOfCreditNote = 0;
+
+    if (originalChargePayed > new_amount) {
+      amountOfCreditNote = originalChargePayed - new_amount;
+    }
 
     const data = {
       student_id: originalCharge.student_id,
@@ -169,24 +198,46 @@ export class ChargesService {
       due_date: dayjs(updateChargeDto.due_date).toDate(),
       description: updateChargeDto.description,
       balanceAdjustment: differenceAmount,
+      amountOfCreditNote,
     };
 
     return this.chargesRepository.updateStudentCharge(chargeId, data);
   }
 
-  async getStudentOutstanding(studentId: string) {
-    const { totalAmountOwed, studentBalance } =
+  async getStudentBalance(studentId: string) {
+    const { studentBalance } =
       await this.chargesRepository.totalAmountOwedAndBalance(studentId);
 
-    const studentTotalOutstanding = totalAmountOwed - studentBalance;
+    const studentChargesAndPayment =
+      await this.chargesRepository.getChargesByStudentId(studentId, {});
+
+    const totalAmountPaid = studentChargesAndPayment.reduce(
+      (acc, charge) =>
+        acc +
+        charge.payment_details.reduce(
+          (acc, payment) => acc + Number(payment.applied_amount),
+          0,
+        ),
+      0,
+    );
+    const totalAmountDue = studentChargesAndPayment.reduce(
+      (acc, charge) => acc + Number(charge.current_amount),
+      0,
+    );
+
+    const totalAmountOwed = totalAmountDue - totalAmountPaid;
+
+    const studentCredit =
+      studentBalance < 0
+        ? Math.abs(studentBalance)
+        : +Math.abs(studentBalance - totalAmountOwed).toFixed(2);
 
     return {
       totalAmountOwed,
-      studentBalance,
-      studentTotalOutstanding,
-      totalAmountOwedFormatted: formatCurrency(totalAmountOwed),
-      studentBalanceFormatted: formatCurrency(studentBalance),
-      studentTotalOutstandingFormatted: formatCurrency(studentTotalOutstanding),
+      studentHasCredit: studentCredit > 0,
+      studentCredit,
+      studentCreditFormatted: formatCurrency(Math.abs(studentCredit)),
+      studentAmountOwedFormatted: formatCurrency(Math.abs(totalAmountOwed)),
     };
   }
 

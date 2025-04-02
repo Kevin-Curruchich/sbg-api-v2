@@ -86,6 +86,68 @@ export class StudentsRepository {
     }
   }
 
+  async getStudentGeneralInfo(studentId: string) {
+    try {
+      return await this.prismaService.students.findUnique({
+        where: {
+          student_id: studentId,
+        },
+        select: {
+          student_id: true,
+          first_name: true,
+          last_name: true,
+          email: true,
+          document_id: true,
+          phone_number: true,
+          address: true,
+          student_types: {
+            select: {
+              student_type_id: true,
+              name: true,
+            },
+          },
+          student_statuses: {
+            select: {
+              student_status_id: true,
+              name: true,
+            },
+          },
+        },
+      });
+    } catch (error) {
+      this.handleError(error);
+    }
+  }
+
+  async getLastStudentGrade(studentId: string) {
+    try {
+      return await this.prismaService.student_grades.findFirst({
+        where: {
+          student_id: studentId,
+        },
+        include: {
+          program_levels: {
+            select: {
+              program_level_id: true,
+              name: true,
+              programs: {
+                select: {
+                  program_id: true,
+                  name: true,
+                },
+              },
+            },
+          },
+        },
+        orderBy: {
+          created_at: 'desc',
+        },
+      });
+    } catch (error) {
+      this.handleError(error);
+    }
+  }
+
   async getAllStudentsPaginated(
     getStudentsQuery: GetStudentsPaginationQueryDto,
     programs: string[] | null,
@@ -231,21 +293,6 @@ export class StudentsRepository {
                 program_id: true,
                 name: true,
               },
-            },
-          },
-        },
-        student_grades: {
-          select: {
-            program_levels: {
-              select: {
-                program_level_id: true,
-                name: true,
-              },
-            },
-          },
-          orderBy: {
-            program_levels: {
-              created_at: 'desc',
             },
           },
         },

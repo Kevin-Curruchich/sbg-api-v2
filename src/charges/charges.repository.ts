@@ -5,6 +5,7 @@ import { StudentChargeRepositoryDto } from './dto/student-charges-query.dto';
 import { GetChargesCreatedRepository } from './dto/get-charges-created.dto';
 import { PrismaCRUD } from 'src/prisma/prisma-crud.service';
 import { ChargeStatuses } from 'src/common/constants/charge-status.constant';
+import { PaymentMethodConstants } from 'src/common/constants/payment-method.constant';
 
 @Injectable()
 export class ChargesRepository {
@@ -221,13 +222,21 @@ export class ChargesRepository {
             applied_amount: true,
             payments: {
               select: {
-                payment_evidence: true,
                 payment_date: true,
+                payment_evidence: true,
                 payment_id: true,
               },
             },
           },
+          orderBy: {
+            payments: {
+              created_at: 'desc',
+            },
+          },
         },
+      },
+      orderBy: {
+        created_at: 'desc',
       },
     });
 
@@ -311,6 +320,19 @@ export class ChargesRepository {
             },
           },
         },
+        payment_details: {
+          select: {
+            payment_detail_id: true,
+            applied_amount: true,
+            payments: {
+              select: {
+                payment_evidence: true,
+                payment_date: true,
+                payment_id: true,
+              },
+            },
+          },
+        },
       },
     });
   }
@@ -323,9 +345,12 @@ export class ChargesRepository {
       due_date?: Date;
       description?: string;
       balanceAdjustment: number;
+      amountOfCreditNote: number;
     },
   ) {
     //If due_date and description are not present, update only the current_amount of the charge and the student balance, if the balanceAdjustment is greater than 0, increment the balance, otherwise decrement it. Create a prisma transaction to update the charge and the student balance
+
+    //if amountOfCreditNote is greater than 0, create a credit note for the student
 
     return await this.prismaService.$transaction([
       this.prismaService.charges.update({
@@ -349,11 +374,33 @@ export class ChargesRepository {
           },
         },
       }),
+      ...(updateChargeDto.amountOfCreditNote > 0
+        ? [
+            this.prismaService.payments.create({
+              data: {
+                student_id: updateChargeDto.student_id,
+                payment_method_id: PaymentMethodConstants.CREDIT_NOTE,
+                reference_number: 'Credit Note',
+                amount: -updateChargeDto.amountOfCreditNote,
+                payment_date: new Date(),
+                payment_details: {
+                  create: [
+                    {
+                      charge_id: chargeId,
+                      applied_amount: -updateChargeDto.amountOfCreditNote,
+                      description: 'Credit Note',
+                    },
+                  ],
+                },
+              },
+            }),
+          ]
+        : []),
     ]);
   }
 
   async totalAmountOwedAndBalance(studentId: string): Promise<{
-    totalAmountOwed: number;
+    totalAmountOwedWithoutPayments: number;
     studentBalance: number;
   }> {
     //Get the total amount owed by the student and the student balance
@@ -369,7 +416,7 @@ export class ChargesRepository {
       },
     });
 
-    const totalAmountOwed = Number(
+    const totalAmountOwedWithoutPayments = Number(
       totalAmountOwedResult._sum.current_amount ?? 0,
     );
 
@@ -383,7 +430,7 @@ export class ChargesRepository {
     });
 
     return {
-      totalAmountOwed,
+      totalAmountOwedWithoutPayments,
       studentBalance: Number(studentBalance?.balance ?? 0),
     };
   }

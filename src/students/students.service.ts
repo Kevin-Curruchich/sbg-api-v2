@@ -108,6 +108,14 @@ export class StudentService {
     return data;
   }
 
+  getLastStudentGrade(studentId: string) {
+    return this.studentRepository.getLastStudentGrade(studentId);
+  }
+
+  getStudentGeneralInfo(studentId: string) {
+    return this.studentRepository.getStudentGeneralInfo(studentId);
+  }
+
   update(id: number, updateStudentDto: UpdateStudentDto) {
     return `This action updates a #${id} student`;
   }

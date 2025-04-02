@@ -48,7 +48,6 @@ model charge_types {
 model charges {
   charge_id        String            @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
   student_id       String            @db.Uuid
-  enrollment_id    String?           @db.Uuid
   charge_type_id   String            @db.Uuid
   charge_status_id String            @db.Uuid
   description      String?
@@ -59,7 +58,6 @@ model charges {
   updated_at       DateTime          @default(now()) @db.Timestamp(6)
   charge_statuses  charge_statuses   @relation(fields: [charge_status_id], references: [charge_status_id], onUpdate: NoAction, map: "fk_charges_charge_status")
   charge_types     charge_types      @relation(fields: [charge_type_id], references: [charge_type_id], onUpdate: NoAction, map: "fk_charges_charge_type")
-  enrollments      enrollments?      @relation(fields: [enrollment_id], references: [enrollment_id], onUpdate: NoAction, map: "fk_charges_enrollments")
   students         students          @relation(fields: [student_id], references: [student_id], onUpdate: NoAction, map: "fk_charges_students")
   payment_details  payment_details[]
 }
@@ -83,7 +81,6 @@ model enrollments {
   created_at           DateTime            @default(now()) @db.Timestamp(6)
   updated_at           DateTime            @default(now()) @db.Timestamp(6)
   program_id           String?             @db.Uuid
-  charges              charges[]
   enrollment_statuses  enrollment_statuses @relation(fields: [enrollment_status_id], references: [enrollment_status_id], onUpdate: NoAction, map: "fk_enrollments_enrollment_statuses")
   programs             programs?           @relation(fields: [program_id], references: [program_id], onDelete: Cascade, onUpdate: NoAction, map: "fk_enrollments_program")
   students             students            @relation(fields: [student_id], references: [student_id], onUpdate: NoAction, map: "fk_enrollments_students")

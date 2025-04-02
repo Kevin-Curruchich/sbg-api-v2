@@ -1,6 +1,7 @@
 import { Type } from 'class-transformer';
 import {
   IsArray,
+  IsBoolean,
   IsDateString,
   IsNumber,
   IsOptional,
@@ -29,6 +30,10 @@ export class CreateStudentPaymentDto {
   @ValidateNested({ each: true })
   @Type(() => PaymentDetails)
   payment_details: PaymentDetails[];
+
+  @IsOptional()
+  @IsBoolean()
+  is_from_credit_balance?: boolean;
 }
 
 export class PaymentDetails {

@@ -17,6 +17,7 @@ import { PaymentsService } from './payments.service';
 
 import { CreateStudentPaymentDto } from './dto/create-student-payment.dto';
 import { GetStudentPaymentsDto } from './dto/get-student-payments.dto';
+import { GetPaymentQueryDto } from './dto/get-payment-query.dto';
 
 @Controller('payments')
 @Auth(ValidRoles.admin, ValidRoles.superuser)
@@ -38,8 +39,11 @@ export class PaymentsController {
   }
 
   @Get(':paymentId')
-  findOne(@Param('paymentId') paymentId: string) {
-    return this.paymentsService.getPaymentById(paymentId);
+  findOne(
+    @Param('paymentId') paymentId: string,
+    @Query() queryParams: GetPaymentQueryDto,
+  ) {
+    return this.paymentsService.getPaymentById(paymentId, queryParams);
   }
 
   @Delete(':id')

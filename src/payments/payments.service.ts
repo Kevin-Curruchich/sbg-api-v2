@@ -3,17 +3,21 @@ import { ConfigService } from '@nestjs/config';
 
 import * as dayjs from 'dayjs';
 
-import { ChargeStatuses } from 'src/common/constants/charge-status.constant';
+import User from 'src/auth/interfaces/user.interface';
+
+import SendGridService from '../common/sendgrid.service';
+import { StudentService } from 'src/students/students.service';
 import { ChargesService } from '../charges/charges.service';
 
-import { StudentService } from 'src/students/students.service';
-import SendGridService from '../common/sendgrid.service';
+import { PaymentsRepository } from './payments.repository';
+
+import { ChargeStatuses } from 'src/common/constants/charge-status.constant';
 
 import { CreateStudentPaymentDto } from './dto/create-student-payment.dto';
-
-import { PaymentsRepository } from './payments.repository';
 import { GetStudentPaymentsDto } from './dto/get-student-payments.dto';
-import User from 'src/auth/interfaces/user.interface';
+import { GetPaymentQueryDto } from './dto/get-payment-query.dto';
+
+import { formatCurrency } from 'src/common/helpers/currency.helper';
 
 @Injectable()
 export class PaymentsService {
@@ -32,7 +36,7 @@ export class PaymentsService {
     });
 
     //Get student charges applied to the payment and validate if each charge is paid in full or not to update the charge status
-    const studentCharges = paymentCreated[0].payment_details.map((detail) => ({
+    const studentCharges = paymentCreated.payment_details.map((detail) => ({
       charge_id: detail.charges.charge_id,
       current_amount: detail.charges.current_amount,
     }));
@@ -64,11 +68,11 @@ export class PaymentsService {
     );
 
     const paymentData = {
-      paymentDate: dayjs(paymentCreated[0].payment_date).format('DD/MM/YYYY'),
-      paymentId: paymentCreated[0].payment_id,
+      paymentDate: dayjs(paymentCreated.payment_date).format('DD/MM/YYYY'),
+      paymentId: paymentCreated.payment_id,
       studentFullName: `${student.first_name} ${student.last_name}`,
-      paymentAmount: paymentCreated[0].amount,
-      paymentDetails: paymentCreated[0].payment_details.map((detail) => ({
+      paymentAmount: paymentCreated.amount,
+      paymentDetails: paymentCreated.payment_details.map((detail) => ({
         collectionName: detail.charges.charge_types.name,
         paymentDescription: detail.description,
         paymentAmount: detail.applied_amount,
@@ -87,11 +91,27 @@ export class PaymentsService {
   async getAllPayments(queryParams: GetStudentPaymentsDto, user: User) {
     const programs = user.admin_programs.map((program) => program.program_id);
 
-    return await this.paymentsRepository.getAllPayments(queryParams, programs);
+    const { data, total } = await this.paymentsRepository.getAllPayments(
+      queryParams,
+      programs,
+    );
+
+    const dataFormatted = data.map((payment) => ({
+      ...payment,
+      payment_date: dayjs(payment.payment_date).format('DD/MM/YYYY'),
+      payment_details: Array.isArray(payment.payment_details)
+        ? payment.payment_details.map((detail) => ({
+            ...detail,
+            applied_amount: formatCurrency(Number(detail.applied_amount)),
+          }))
+        : [],
+    }));
+
+    return { data: dataFormatted, total };
   }
 
-  getPaymentById(id: string) {
-    return this.paymentsRepository.getPaymentById(id);
+  getPaymentById(id: string, queryParams: GetPaymentQueryDto) {
+    return this.paymentsRepository.getPaymentById(id, queryParams);
   }
 
   async removePaymentById(paymentId: string) {
