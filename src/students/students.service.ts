@@ -20,14 +20,18 @@ export class StudentService {
   constructor(private readonly studentRepository: StudentsRepository) {}
 
   async createStudent(createStudentDto: CreateStudentDto) {
-    const studentData = {
-      ...createStudentDto,
-      birthday: dayjs(createStudentDto.birthday).toDate(),
-      start_date: dayjs(createStudentDto.start_date).toDate(),
-      student_status_id: StudentStatusConstant.ACTIVE,
-    };
+    try {
+      const studentData = {
+        ...createStudentDto,
+        birthday: dayjs(createStudentDto.birthday).toDate(),
+        student_status_id: StudentStatusConstant.ACTIVE,
+      };
 
-    await this.studentRepository.createStudent(studentData);
+      await this.studentRepository.createStudent(studentData);
+    } catch (error) {
+      console.error('Error creating student:', error);
+      throw new Error('Failed to create student');
+    }
   }
 
   async getAllStudents(

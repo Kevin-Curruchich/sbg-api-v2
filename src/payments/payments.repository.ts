@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateStudentPaymentDto } from './dto/create-student-payment.dto';
-import { GetStudentPaymentsDto } from './dto/get-student-payments.dto';
+import { GetStudentPaymentsRepository } from './dto/get-student-payments.dto';
 import { Prisma } from '@prisma/client';
 
 @Injectable()
@@ -77,7 +77,12 @@ export class PaymentsRepository {
     });
   }
 
-  async getAllPayments(queryParams: GetStudentPaymentsDto, programs: string[]) {
+  async getAllPayments(
+    queryParams: GetStudentPaymentsRepository,
+    programs: string[],
+  ) {
+    const { payment_date } = queryParams;
+
     const where: Prisma.paymentsWhereInput = {};
 
     if (queryParams.searchQuery) {
@@ -112,6 +117,13 @@ export class PaymentsRepository {
             },
           },
         },
+      };
+    }
+
+    if (payment_date) {
+      where.payment_date = {
+        gte: queryParams.payment_date_start,
+        lte: queryParams.payment_date_end,
       };
     }
 

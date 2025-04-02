@@ -69,7 +69,7 @@ export class PaymentsService {
 
     const paymentData = {
       paymentDate: dayjs(paymentCreated.payment_date).format('DD/MM/YYYY'),
-      paymentId: paymentCreated.payment_id,
+      paymentId: paymentCreated.public_payment_id,
       studentFullName: `${student.first_name} ${student.last_name}`,
       paymentAmount: paymentCreated.amount,
       paymentDetails: paymentCreated.payment_details.map((detail) => ({
@@ -91,8 +91,17 @@ export class PaymentsService {
   async getAllPayments(queryParams: GetStudentPaymentsDto, user: User) {
     const programs = user.admin_programs.map((program) => program.program_id);
 
+    const queryWithDates = {
+      ...queryParams,
+
+      payment_date_start: dayjs(queryParams.payment_date)
+        .startOf('month')
+        .toDate(),
+      payment_date_end: dayjs(queryParams.payment_date).endOf('month').toDate(),
+    };
+
     const { data, total } = await this.paymentsRepository.getAllPayments(
-      queryParams,
+      queryWithDates,
       programs,
     );
 

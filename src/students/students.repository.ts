@@ -24,19 +24,8 @@ export class StudentsRepository {
   async createStudent(data: CreateStudentDto) {
     try {
       return await this.prismaService.$transaction(async (prisma) => {
-        const { start_date, program_level_id, ...studentData } = data;
-
         const student = await prisma.students.create({
-          data: studentData,
-        });
-
-        await prisma.student_grades.create({
-          data: {
-            student_id: student.student_id,
-            program_level_id: program_level_id,
-            start_date,
-            student_grade_status_id: GradeLevelStatuses.REGULAR,
-          },
+          data,
         });
 
         return student;
@@ -158,8 +147,8 @@ export class StudentsRepository {
       student_status_id: getStudentsQuery.student_status_id,
       student_types: {
         program_id: program_id || undefined,
-        student_type_id: getStudentsQuery.student_type_id,
       },
+      student_type_id: getStudentsQuery.student_type_id || undefined,
       OR: [
         {
           student_grades: {

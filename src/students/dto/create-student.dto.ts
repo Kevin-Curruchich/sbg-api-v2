@@ -1,4 +1,5 @@
-import { IsDateString, IsEmail, IsOptional, IsString } from 'class-validator';
+import { Transform } from 'class-transformer';
+import { IsDateString, IsEmail, IsNumber, IsString } from 'class-validator';
 
 export class CreateStudentDto {
   @IsString()
@@ -6,6 +7,10 @@ export class CreateStudentDto {
 
   @IsString()
   last_name: string;
+
+  @IsNumber()
+  @Transform(({ value }) => Number(value))
+  sex: number;
 
   @IsString()
   document_id: string;
@@ -21,14 +26,4 @@ export class CreateStudentDto {
 
   @IsDateString()
   birthday: Date;
-
-  @IsString()
-  student_type_id: string;
-
-  @IsString()
-  @IsOptional()
-  program_level_id: string;
-
-  @IsDateString()
-  start_date: Date;
 }

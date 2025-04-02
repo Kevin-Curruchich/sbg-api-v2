@@ -114,6 +114,7 @@ model payments {
   created_at        DateTime           @default(now()) @db.Timestamp(6)
   updated_at        DateTime           @default(now()) @db.Timestamp(6)
   payment_method_id String             @db.Uuid
+  public_payment_id String?            @db.VarChar(50)
   payment_details   payment_details[]
   payment_evidence  payment_evidence[]
   payment_methods   payment_methods    @relation(fields: [payment_method_id], references: [payment_method_id], onDelete: SetNull, onUpdate: NoAction, map: "fk_payments_payment_method")
@@ -177,6 +178,7 @@ model students {
   student_status_id String?           @db.Uuid
   created_at        DateTime          @default(now()) @db.Timestamp(6)
   updated_at        DateTime          @default(now()) @db.Timestamp(6)
+  sex               Decimal?          @default(1) @db.Decimal
   charges           charges[]
   enrollments       enrollments[]
   payments          payments[]
