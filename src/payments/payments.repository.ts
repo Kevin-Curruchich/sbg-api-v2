@@ -3,6 +3,10 @@ import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateStudentPaymentDto } from './dto/create-student-payment.dto';
 import { GetStudentPaymentsRepository } from './dto/get-student-payments.dto';
 import { Prisma } from '@prisma/client';
+import {
+  PaymentReportsDto,
+  PaymentReportsRepository,
+} from 'src/reports/dto/payments-reports.dto';
 
 @Injectable()
 export class PaymentsRepository {
@@ -77,8 +81,8 @@ export class PaymentsRepository {
     });
   }
 
-  async getAllPayments(
-    queryParams: GetStudentPaymentsRepository,
+  async getAllPaymentsWithoutPagination(
+    queryParams: PaymentReportsRepository,
     programs: string[],
   ) {
     const { payment_date } = queryParams;
@@ -104,6 +108,13 @@ export class PaymentsRepository {
       };
     }
 
+    if (payment_date) {
+      where.payment_date = {
+        gte: queryParams.payment_date_start,
+        lte: queryParams.payment_date_end,
+      };
+    }
+
     if (programs.length > 0) {
       where.AND = {
         students: {
@@ -117,13 +128,6 @@ export class PaymentsRepository {
             },
           },
         },
-      };
-    }
-
-    if (payment_date) {
-      where.payment_date = {
-        gte: queryParams.payment_date_start,
-        lte: queryParams.payment_date_end,
       };
     }
 
@@ -156,12 +160,117 @@ export class PaymentsRepository {
             },
           },
         },
+        payment_methods: {
+          select: {
+            payment_method_id: true,
+            name: true,
+          },
+        },
       },
       orderBy: {
         created_at: 'desc',
       },
-      skip: (queryParams.page - 1) * queryParams.take,
-      take: queryParams.take,
+    });
+
+    return payments;
+  }
+
+  async getAllPayments(
+    queryParams: GetStudentPaymentsRepository,
+    programs: string[],
+    settings: {
+      returnPaginated: boolean;
+    } = { returnPaginated: true },
+  ) {
+    const { payment_date } = queryParams;
+
+    const where: Prisma.paymentsWhereInput = {};
+
+    if (queryParams.searchQuery) {
+      where.students = {
+        OR: [
+          {
+            first_name: {
+              contains: queryParams.searchQuery,
+              mode: 'insensitive',
+            },
+          },
+          {
+            last_name: {
+              contains: queryParams.searchQuery,
+              mode: 'insensitive',
+            },
+          },
+        ],
+      };
+    }
+
+    if (payment_date) {
+      where.payment_date = {
+        gte: queryParams.payment_date_start,
+        lte: queryParams.payment_date_end,
+      };
+    }
+
+    if (programs.length > 0) {
+      where.AND = {
+        students: {
+          student_grades: {
+            every: {
+              program_levels: {
+                program_id: {
+                  in: programs,
+                },
+              },
+            },
+          },
+        },
+      };
+    }
+
+    const payments = await this.prismaService.payments.findMany({
+      where,
+      include: {
+        students: {
+          select: {
+            student_id: true,
+            first_name: true,
+            last_name: true,
+            email: true,
+          },
+        },
+        payment_details: {
+          select: {
+            applied_amount: true,
+            description: true,
+            charges: {
+              select: {
+                charge_id: true,
+                current_amount: true,
+                charge_types: {
+                  select: {
+                    name: true,
+                    charge_type_id: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+        payment_methods: {
+          select: {
+            payment_method_id: true,
+            name: true,
+          },
+        },
+      },
+      orderBy: {
+        created_at: 'desc',
+      },
+      ...(settings.returnPaginated && {
+        skip: (queryParams.page - 1) * queryParams.take,
+        take: queryParams.take,
+      }),
     });
 
     const total = await this.prismaService.payments.count({ where });

@@ -1,34 +1,27 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete } from '@nestjs/common';
+import { Controller, Get, Query, Res } from '@nestjs/common';
+import { ApiBearerAuth } from '@nestjs/swagger';
+import { Response } from 'express';
+
+import { Auth } from 'src/auth/decorators/auth.decorator';
+import { GetUser } from 'src/auth/decorators/get-user.decorator';
+import { ValidRoles } from 'src/auth/interfaces';
+import User from 'src/auth/interfaces/user.interface';
+
 import { ReportsService } from './reports.service';
-import { CreateReportDto } from './dto/create-report.dto';
-import { UpdateReportDto } from './dto/update-report.dto';
+import { PaymentReportsDto } from './dto/payments-reports.dto';
 
 @Controller('reports')
+@Auth(ValidRoles.admin, ValidRoles.superuser)
+@ApiBearerAuth()
 export class ReportsController {
   constructor(private readonly reportsService: ReportsService) {}
 
-  @Post()
-  create(@Body() createReportDto: CreateReportDto) {
-    return this.reportsService.create(createReportDto);
-  }
-
-  @Get()
-  findAll() {
-    return this.reportsService.findAll();
-  }
-
-  @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.reportsService.findOne(+id);
-  }
-
-  @Patch(':id')
-  update(@Param('id') id: string, @Body() updateReportDto: UpdateReportDto) {
-    return this.reportsService.update(+id, updateReportDto);
-  }
-
-  @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.reportsService.remove(+id);
+  @Get('payments')
+  async getPaymentsReports(
+    @Res() res: Response,
+    @Query() queryParams: PaymentReportsDto,
+    @GetUser() user: User,
+  ) {
+    await this.reportsService.getPaymentsReports(queryParams, user, res);
   }
 }

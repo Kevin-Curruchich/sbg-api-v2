@@ -18,6 +18,7 @@ import { GetStudentPaymentsDto } from './dto/get-student-payments.dto';
 import { GetPaymentQueryDto } from './dto/get-payment-query.dto';
 
 import { formatCurrency } from 'src/common/helpers/currency.helper';
+import { PaymentReportsDto } from 'src/reports/dto/payments-reports.dto';
 
 @Injectable()
 export class PaymentsService {
@@ -88,7 +89,47 @@ export class PaymentsService {
     return paymentCreated;
   }
 
-  async getAllPayments(queryParams: GetStudentPaymentsDto, user: User) {
+  async getAllPaymentsWithoutPagination(
+    queryParams: PaymentReportsDto,
+    user: User,
+  ) {
+    const programs = user.admin_programs.map((program) => program.program_id);
+
+    const queryWithDates = {
+      ...queryParams,
+
+      payment_date_start: dayjs(queryParams.payment_date)
+        .startOf('month')
+        .toDate(),
+      payment_date_end: dayjs(queryParams.payment_date).endOf('month').toDate(),
+    };
+
+    const data = await this.paymentsRepository.getAllPaymentsWithoutPagination(
+      queryWithDates,
+      programs,
+    );
+
+    const dataFormatted = data.map((payment) => ({
+      ...payment,
+      payment_date: dayjs(payment.payment_date).format('DD/MM/YYYY'),
+      payment_details: Array.isArray(payment.payment_details)
+        ? payment.payment_details.map((detail) => ({
+            ...detail,
+            applied_amount: formatCurrency(Number(detail.applied_amount)),
+          }))
+        : [],
+    }));
+
+    return dataFormatted;
+  }
+
+  async getAllPayments(
+    queryParams: GetStudentPaymentsDto,
+    user: User,
+    settings: {
+      returnPaginated: boolean;
+    } = { returnPaginated: true },
+  ) {
     const programs = user.admin_programs.map((program) => program.program_id);
 
     const queryWithDates = {
@@ -103,6 +144,7 @@ export class PaymentsService {
     const { data, total } = await this.paymentsRepository.getAllPayments(
       queryWithDates,
       programs,
+      settings,
     );
 
     const dataFormatted = data.map((payment) => ({

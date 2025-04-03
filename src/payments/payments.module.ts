@@ -22,5 +22,6 @@ import { AuthModule } from 'src/auth/auth.module';
   ],
   controllers: [PaymentsController],
   providers: [PaymentsService, PaymentsRepository, ConfigService],
+  exports: [PaymentsService],
 })
 export class PaymentsModule {}
