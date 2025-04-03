@@ -75,6 +75,33 @@ export class StudentsRepository {
     }
   }
 
+  getStudentByIdentifier(term: string) {
+    try {
+      return this.prismaService.students.findFirst({
+        where: {
+          OR: [
+            {
+              document_id: {
+                contains: term,
+              },
+            },
+          ],
+        },
+        select: {
+          student_id: true,
+          first_name: true,
+          last_name: true,
+          email: true,
+          document_id: true,
+          phone_number: true,
+          address: true,
+        },
+      });
+    } catch (error) {
+      this.handleError(error);
+    }
+  }
+
   async getStudentGeneralInfo(studentId: string) {
     try {
       return await this.prismaService.students.findUnique({

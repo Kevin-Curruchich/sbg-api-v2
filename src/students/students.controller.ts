@@ -59,6 +59,12 @@ export class StudentController {
     return this.studentService.getStudentById(id);
   }
 
+  @Get('identifier/:term')
+  @Auth() // Remove role restrictions to make it public
+  getStudentByIdentifier(@Param('term') term: string) {
+    return this.studentService.getStudentByIdentifier(term);
+  }
+
   @Patch(':id')
   update(@Param('id') id: string, @Body() updateStudentDto: UpdateStudentDto) {
     return this.studentService.update(+id, updateStudentDto);

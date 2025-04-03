@@ -112,6 +112,17 @@ export class StudentService {
     return data;
   }
 
+  async getStudentByIdentifier(term: string) {
+    const studentData =
+      await this.studentRepository.getStudentByIdentifier(term);
+
+    if (!studentData) {
+      return null;
+    }
+
+    return studentData;
+  }
+
   getLastStudentGrade(studentId: string) {
     return this.studentRepository.getLastStudentGrade(studentId);
   }
