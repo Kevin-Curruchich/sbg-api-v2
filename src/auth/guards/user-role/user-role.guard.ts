@@ -17,6 +17,12 @@ export class UserRoleGuard implements CanActivate {
   canActivate(
     context: ExecutionContext,
   ): boolean | Promise<boolean> | Observable<boolean> {
+    const isPublic = this.reflector.get<boolean>(
+      'isPublic',
+      context.getHandler(),
+    );
+    if (isPublic) return true;
+
     const validRoles: string[] = this.reflector.get(
       META_ROLES,
       context.getHandler(),

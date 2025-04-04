@@ -16,6 +16,7 @@ import {
   GetStudentsQueryDto,
 } from './dto/get-students-query.dto';
 
+import { Public } from 'src/auth/decorators/public.decorator';
 import { Auth } from 'src/auth/decorators/auth.decorator';
 import { ValidRoles } from 'src/auth/interfaces';
 import { GetUser } from 'src/auth/decorators/get-user.decorator';
@@ -59,9 +60,9 @@ export class StudentController {
     return this.studentService.getStudentById(id);
   }
 
-  @Get('identifier/:term')
-  @Auth() // Remove role restrictions to make it public
-  getStudentByIdentifier(@Param('term') term: string) {
+  @Get('identifier')
+  @Public() // Remove role restrictions to make it public
+  getStudentByIdentifier(@Query('term') term: string) {
     return this.studentService.getStudentByIdentifier(term);
   }
 
