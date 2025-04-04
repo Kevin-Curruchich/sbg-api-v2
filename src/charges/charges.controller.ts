@@ -21,6 +21,7 @@ import { GetChargesCreated } from './dto/get-charges-created.dto';
 import { UpdateStudentChargeDto } from './dto/update-student-charge.dto';
 import { GetUser } from 'src/auth/decorators/get-user.decorator';
 import User from 'src/auth/interfaces/user.interface';
+import { Public } from 'src/auth/decorators/public.decorator';
 
 @Controller('charges')
 @Auth(ValidRoles.admin, ValidRoles.superuser)
@@ -44,6 +45,7 @@ export class ChargesController {
   }
 
   @Get('student/:studentId/balance')
+  @Public() // Remove role restrictions to make it public
   getStudentBalance(@Param('studentId') studentId: string) {
     return this.chargesService.getStudentBalance(studentId);
   }
