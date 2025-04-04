@@ -9,6 +9,7 @@ import {
 import { Observable } from 'rxjs';
 
 import { META_ROLES } from 'src/auth/decorators/role-protected/role-protected.decorator';
+import { IS_PUBLIC_KEY } from 'src/auth/decorators/public.decorator';
 
 @Injectable()
 export class UserRoleGuard implements CanActivate {
@@ -17,10 +18,11 @@ export class UserRoleGuard implements CanActivate {
   canActivate(
     context: ExecutionContext,
   ): boolean | Promise<boolean> | Observable<boolean> {
-    const isPublic = this.reflector.get<boolean>(
-      'isPublic',
+    const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
       context.getHandler(),
-    );
+      context.getClass(),
+    ]);
+
     if (isPublic) return true;
 
     const validRoles: string[] = this.reflector.get(
