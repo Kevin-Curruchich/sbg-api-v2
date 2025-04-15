@@ -17,5 +17,3 @@ export class PaymentReportsDto {
   @IsDateString()
   payment_date_end?: string;
 }
-
-export class PaymentReportsRepository extends PaymentReportsDto {}

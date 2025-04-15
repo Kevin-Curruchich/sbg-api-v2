@@ -337,6 +337,21 @@ export class StudentsRepository {
     });
   }
 
+  async getStudentsCount(programs: string[] | null) {
+    return await this.prismaService.students.count({
+      where: {
+        student_status_id: StudentStatusConstant.ACTIVE,
+        student_types: {
+          programs: {
+            program_id: {
+              in: programs,
+            },
+          },
+        },
+      },
+    });
+  }
+
   private handleError(error: Prisma.PrismaClientKnownRequestError) {
     if (error.code === 'P2002') {
       throw new BadRequestException(

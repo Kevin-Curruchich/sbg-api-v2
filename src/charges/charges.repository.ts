@@ -439,6 +439,78 @@ export class ChargesRepository {
     return await this.prismaService.charge_statuses.findMany();
   }
 
+  async getPaymentCollectionRate(
+    programs: string[],
+    period?: { start: Date; end: Date },
+  ) {
+    try {
+      // Build where condition
+      const whereCondition: Prisma.chargesWhereInput = {};
+
+      // Add period filter if provided
+      if (period) {
+        whereCondition.created_at = {
+          gte: period.start,
+          lte: period.end,
+        };
+      }
+
+      // Add program filter only if programs array is not empty
+      if (programs.length > 0) {
+        whereCondition.students = {
+          student_grades: {
+            some: {
+              program_levels: {
+                program_id: {
+                  in: programs,
+                },
+              },
+            },
+          },
+        };
+      }
+
+      // Get all charges
+      const charges = await this.prismaService.charges.findMany({
+        where: whereCondition,
+        select: {
+          current_amount: true,
+          payment_details: {
+            select: {
+              applied_amount: true,
+            },
+          },
+        },
+      });
+
+      // Calculate totals
+      const totalCharges = charges.reduce(
+        (acc, charge) => acc + Number(charge.current_amount),
+        0,
+      );
+
+      const totalPaid = charges.reduce(
+        (acc, charge) =>
+          acc +
+          charge.payment_details.reduce(
+            (sum, detail) => sum + Number(detail.applied_amount),
+            0,
+          ),
+        0,
+      );
+
+      return {
+        totalCharges,
+        totalPaid,
+        collectionRate: totalCharges > 0 ? (totalPaid / totalCharges) * 100 : 0,
+      };
+    } catch (error) {
+      throw new Error(
+        `Failed to calculate payment collection rate: ${error.message}`,
+      );
+    }
+  }
+
   private async handleError(error: Prisma.PrismaClientKnownRequestError) {
     if (error.code === 'P2002') {
       throw new BadRequestException({

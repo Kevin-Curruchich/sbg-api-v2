@@ -134,4 +134,8 @@ export class StudentService {
   update(id: number, updateStudentDto: UpdateStudentDto) {
     return `This action updates a #${id} student`;
   }
+
+  async getStudentsCount(programs: string[]) {
+    return await this.studentRepository.getStudentsCount(programs);
+  }
 }

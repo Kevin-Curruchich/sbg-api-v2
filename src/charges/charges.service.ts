@@ -241,6 +241,28 @@ export class ChargesService {
     };
   }
 
+  // Add this method to ChargesService class
+  async getPaymentCollectionRate(
+    programs: string[],
+    period?: { start: Date; end: Date },
+  ) {
+    const result = await this.chargesRepository.getPaymentCollectionRate(
+      programs,
+      period,
+    );
+
+    return {
+      totalCharges: formatCurrency(result.totalCharges),
+      totalPaid: formatCurrency(result.totalPaid),
+      collectionRate: result.collectionRate.toFixed(2) + '%',
+      rawData: {
+        totalCharges: result.totalCharges,
+        totalPaid: result.totalPaid,
+        collectionRate: result.collectionRate,
+      },
+    };
+  }
+
   remove(id: number) {
     return `This action removes a #${id} charge`;
   }

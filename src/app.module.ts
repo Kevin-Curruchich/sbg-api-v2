@@ -10,6 +10,7 @@ import { PaymentsModule } from './payments/payments.module';
 import { AuthModule } from './auth/auth.module';
 import { PaymentAssistantModule } from './payment-assistant/payment-assistant.module';
 import { ReportsModule } from './reports/reports.module';
+import { GeneralModule } from './general/general.module';
 
 @Module({
   controllers: [AppController],
@@ -24,6 +25,7 @@ import { ReportsModule } from './reports/reports.module';
     AuthModule,
     PaymentAssistantModule,
     ReportsModule,
+    GeneralModule,
   ],
 })
 export class AppModule {}

@@ -95,19 +95,8 @@ export class PaymentsService {
   ) {
     const programs = user.admin_programs.map((program) => program.program_id);
 
-    const queryWithDates = {
-      ...queryParams,
-
-      payment_date_start: dayjs(queryParams.payment_date_start)
-        .startOf('month')
-        .toDate(),
-      payment_date_end: dayjs(queryParams.payment_date_end)
-        .endOf('month')
-        .toDate(),
-    };
-
     const data = await this.paymentsRepository.getAllPaymentsWithoutPagination(
-      queryWithDates,
+      queryParams,
       programs,
     );
 
@@ -240,5 +229,18 @@ export class PaymentsService {
     );
 
     return this.paymentsRepository.removePaymentById(paymentId);
+  }
+
+  async totalPaymentsByMonth(
+    paymentsDates: {
+      startDate: string;
+      endDate: string;
+    },
+    programs: string[] | null,
+  ) {
+    return await this.paymentsRepository.totalPaymentsByMonth(
+      paymentsDates,
+      programs,
+    );
   }
 }

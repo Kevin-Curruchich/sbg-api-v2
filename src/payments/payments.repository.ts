@@ -3,10 +3,8 @@ import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateStudentPaymentDto } from './dto/create-student-payment.dto';
 import { GetStudentPaymentsRepository } from './dto/get-student-payments.dto';
 import { Prisma } from '@prisma/client';
-import {
-  PaymentReportsDto,
-  PaymentReportsRepository,
-} from 'src/reports/dto/payments-reports.dto';
+import { PaymentReportsDto } from 'src/reports/dto/payments-reports.dto';
+import * as dayjs from 'dayjs';
 
 @Injectable()
 export class PaymentsRepository {
@@ -82,7 +80,7 @@ export class PaymentsRepository {
   }
 
   async getAllPaymentsWithoutPagination(
-    queryParams: PaymentReportsRepository,
+    queryParams: PaymentReportsDto,
     programs: string[],
   ) {
     const where: Prisma.paymentsWhereInput = {};
@@ -108,8 +106,8 @@ export class PaymentsRepository {
 
     if (queryParams.payment_date_start && queryParams.payment_date_end) {
       where.payment_date = {
-        gte: queryParams.payment_date_start,
-        lte: queryParams.payment_date_end,
+        gte: dayjs(queryParams.payment_date_start).startOf('day').toDate(),
+        lte: dayjs(queryParams.payment_date_end).endOf('day').toDate(),
       };
     }
 
@@ -203,8 +201,8 @@ export class PaymentsRepository {
 
     if (queryParams.payment_date_start && queryParams.payment_date_end) {
       where.payment_date = {
-        gte: queryParams.payment_date_start,
-        lte: queryParams.payment_date_end,
+        gte: dayjs(queryParams.payment_date_start).startOf('day').toDate(),
+        lte: dayjs(queryParams.payment_date_end).endOf('day').toDate(),
       };
     }
 
@@ -362,5 +360,48 @@ export class PaymentsRepository {
     } catch (error) {
       throw new BadRequestException('Error deleting payment');
     }
+  }
+
+  async totalPaymentsByMonth(
+    paymentsDates: {
+      startDate: string;
+      endDate: string;
+    },
+    programs: string[],
+  ) {
+    const where: Prisma.paymentsWhereInput = {
+      payment_date: {
+        gte: paymentsDates.startDate,
+        lte: paymentsDates.endDate,
+      },
+    };
+
+    if (programs.length > 0) {
+      where.students = {
+        student_grades: {
+          some: {
+            program_levels: {
+              program_id: {
+                in: programs,
+              },
+            },
+          },
+        },
+      };
+    }
+
+    const payments = await this.prismaService.payments.findMany({
+      where,
+      select: {
+        amount: true,
+      },
+    });
+
+    const total = payments.reduce(
+      (acc, payment) => acc + Number(payment.amount),
+      0,
+    );
+
+    return total;
   }
 }
