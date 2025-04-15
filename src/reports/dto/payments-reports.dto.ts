@@ -11,10 +11,11 @@ export class PaymentReportsDto {
 
   @IsOptional()
   @IsDateString()
-  payment_date?: string;
+  payment_date_start?: string;
+
+  @IsOptional()
+  @IsDateString()
+  payment_date_end?: string;
 }
 
-export class PaymentReportsRepository extends PaymentReportsDto {
-  payment_date_start?: Date;
-  payment_date_end?: Date;
-}
+export class PaymentReportsRepository extends PaymentReportsDto {}

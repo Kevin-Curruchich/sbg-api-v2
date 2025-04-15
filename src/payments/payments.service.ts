@@ -98,10 +98,12 @@ export class PaymentsService {
     const queryWithDates = {
       ...queryParams,
 
-      payment_date_start: dayjs(queryParams.payment_date)
+      payment_date_start: dayjs(queryParams.payment_date_start)
         .startOf('month')
         .toDate(),
-      payment_date_end: dayjs(queryParams.payment_date).endOf('month').toDate(),
+      payment_date_end: dayjs(queryParams.payment_date_end)
+        .endOf('month')
+        .toDate(),
     };
 
     const data = await this.paymentsRepository.getAllPaymentsWithoutPagination(
@@ -135,11 +137,14 @@ export class PaymentsService {
     const queryWithDates = {
       ...queryParams,
 
-      payment_date_start: dayjs(queryParams.payment_date)
-        .startOf('month')
+      payment_date_start: dayjs(queryParams.payment_date_start)
+        .startOf('day')
         .toDate(),
-      payment_date_end: dayjs(queryParams.payment_date).endOf('month').toDate(),
+      payment_date_end: dayjs(queryParams.payment_date_end)
+        .endOf('day')
+        .toDate(),
     };
+    // payment_date_end: dayjs(queryParams.payment_date).endOf('month').toDate(),
 
     const { data, total } = await this.paymentsRepository.getAllPayments(
       queryWithDates,

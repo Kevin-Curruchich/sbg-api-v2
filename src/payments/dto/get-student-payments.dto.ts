@@ -12,10 +12,17 @@ export class GetStudentPaymentsDto extends PaginationQueryDTO {
 
   @IsOptional()
   @IsDateString()
-  payment_date?: string;
-}
-
-export class GetStudentPaymentsRepository extends GetStudentPaymentsDto {
   payment_date_start?: Date;
+
+  @IsOptional()
+  @IsDateString(
+    {},
+    {
+      message:
+        'payment_date_end is required when payment_date_start is provided',
+    },
+  )
   payment_date_end?: Date;
 }
+
+export class GetStudentPaymentsRepository extends GetStudentPaymentsDto {}

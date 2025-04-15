@@ -85,8 +85,6 @@ export class PaymentsRepository {
     queryParams: PaymentReportsRepository,
     programs: string[],
   ) {
-    const { payment_date } = queryParams;
-
     const where: Prisma.paymentsWhereInput = {};
 
     if (queryParams.searchQuery) {
@@ -108,7 +106,7 @@ export class PaymentsRepository {
       };
     }
 
-    if (payment_date) {
+    if (queryParams.payment_date_start && queryParams.payment_date_end) {
       where.payment_date = {
         gte: queryParams.payment_date_start,
         lte: queryParams.payment_date_end,
@@ -182,8 +180,6 @@ export class PaymentsRepository {
       returnPaginated: boolean;
     } = { returnPaginated: true },
   ) {
-    const { payment_date } = queryParams;
-
     const where: Prisma.paymentsWhereInput = {};
 
     if (queryParams.searchQuery) {
@@ -205,7 +201,7 @@ export class PaymentsRepository {
       };
     }
 
-    if (payment_date) {
+    if (queryParams.payment_date_start && queryParams.payment_date_end) {
       where.payment_date = {
         gte: queryParams.payment_date_start,
         lte: queryParams.payment_date_end,
