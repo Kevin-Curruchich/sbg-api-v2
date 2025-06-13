@@ -15,7 +15,11 @@ import { GetUser } from 'src/auth/decorators/get-user.decorator';
 import { ValidRoles } from 'src/auth/interfaces';
 import { PaymentsService } from './payments.service';
 
-import { CreateStudentPaymentDto } from './dto/create-student-payment.dto';
+import {
+  CreateStudentAutomatizedPaymentDto,
+  CreateStudentPaymentDto,
+  CreateStudentsPaymentDto,
+} from './dto/create-student-payment.dto';
 import { GetStudentPaymentsDto } from './dto/get-student-payments.dto';
 import { GetPaymentQueryDto } from './dto/get-payment-query.dto';
 
@@ -28,6 +32,27 @@ export class PaymentsController {
   @Post()
   createStudentPayment(@Body() createPaymentDto: CreateStudentPaymentDto) {
     return this.paymentsService.createStudentPayment(createPaymentDto);
+  }
+
+  @Post('automatized')
+  createAutomatizedPayment(
+    @Body() createPaymentDto: CreateStudentAutomatizedPaymentDto,
+  ) {
+    return this.paymentsService.createAutomatizedPayment(createPaymentDto);
+  }
+
+  @Post('automatized-balance')
+  spreadStudentPositiveBalanceToCharges(@Param('studentId') studentId: string) {
+    return this.paymentsService.spreadStudentPositiveBalanceToCharges(
+      studentId,
+    );
+  }
+
+  @Post('students')
+  createPaymentsForStudents(
+    @Body() createPaymentDto: CreateStudentsPaymentDto,
+  ) {
+    return this.paymentsService.createPaymentsForStudents(createPaymentDto);
   }
 
   @Get()

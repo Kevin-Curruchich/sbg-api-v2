@@ -35,4 +35,12 @@ export class ProgramsRepository {
       },
     });
   }
+
+  async getProgramById(programId: string) {
+    return await this.prismaService.programs.findUnique({
+      where: {
+        program_id: programId,
+      },
+    });
+  }
 }

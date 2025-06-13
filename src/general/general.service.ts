@@ -5,6 +5,7 @@ import * as dayjs from 'dayjs';
 import User from 'src/auth/interfaces/user.interface';
 import { PaymentsService } from 'src/payments/payments.service';
 import { ChargesService } from 'src/charges/charges.service';
+import { formatCurrency } from 'src/common/helpers/currency.helper';
 
 @Injectable()
 export class GeneralService {
@@ -31,7 +32,7 @@ export class GeneralService {
       start: startOfMonth.format('YYYY-MM-DD'),
       end: endOfMonth.format('YYYY-MM-DD'),
       month: startOfMonth.format('MMMM YYYY'),
-      total: 0,
+      total: '',
     };
 
     for (let i = 0; i < 3; i++) {
@@ -54,7 +55,7 @@ export class GeneralService {
       });
 
       if (i === 0) {
-        totalCurrentMonth.total = totalMonth;
+        totalCurrentMonth.total = formatCurrency(totalMonth);
       }
     }
 
@@ -68,7 +69,7 @@ export class GeneralService {
 
     return {
       studentsCount,
-      totalPaymentsByMonth,
+      totalPaymentsByMonth: totalPaymentsByMonth.reverse(),
       totalCurrentMonth,
       collectionRate,
     };

@@ -1,4 +1,4 @@
-import { IsDateString, IsOptional, IsString } from 'class-validator';
+import { IsDateString, IsOptional, IsString, IsUUID } from 'class-validator';
 import { PaginationQueryDTO } from 'src/common/dto/pagination-query.dto';
 
 export class GetChargesCreated extends PaginationQueryDTO {
@@ -22,4 +22,18 @@ export class GetChargesCreated extends PaginationQueryDTO {
 export class GetChargesCreatedRepository extends GetChargesCreated {
   due_date_start?: Date;
   due_date_end?: Date;
+}
+
+export class GetChargesAppliedToStudentsByFiltersDto {
+  @IsOptional()
+  @IsUUID()
+  program_id: string;
+
+  @IsOptional()
+  @IsUUID()
+  student_type_id: string;
+
+  @IsOptional()
+  @IsUUID()
+  charge_type_id: string;
 }

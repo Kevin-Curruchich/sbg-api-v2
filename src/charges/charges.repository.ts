@@ -2,10 +2,18 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { StudentChargeRepositoryDto } from './dto/student-charges-query.dto';
-import { GetChargesCreatedRepository } from './dto/get-charges-created.dto';
+import {
+  GetChargesAppliedToStudentsByFiltersDto,
+  GetChargesCreatedRepository,
+} from './dto/get-charges-created.dto';
 import { PrismaCRUD } from 'src/prisma/prisma-crud.service';
 import { ChargeStatuses } from 'src/common/constants/charge-status.constant';
 import { PaymentMethodConstants } from 'src/common/constants/payment-method.constant';
+import {
+  CreateForStudentChargeRepositoryDto,
+  CreateForStudentsChargeDto,
+} from './dto/create-charge-for-student.dto';
+import { StudentBalanceTransaction } from 'src/common/enums/student-balance-transaction.enum';
 
 @Injectable()
 export class ChargesRepository {
@@ -130,15 +138,46 @@ export class ChargesRepository {
     return { data, total };
   }
 
-  async getChargesByProgramId(programId: string) {
+  async getChargesApplyToStudentsByFilters(
+    queryParams: GetChargesAppliedToStudentsByFiltersDto,
+  ) {
+    const { program_id, student_type_id, charge_type_id } = queryParams;
+
+    const whereCondition: Prisma.charge_typesWhereInput = {
+      OR: [
+        {
+          program_id: {
+            in: program_id ? [program_id] : [],
+          },
+        },
+        {
+          program_id: null, // Include charges that apply to all programs
+        },
+      ],
+      charge_type_applicability: {
+        some: {
+          student_type_id: student_type_id ? student_type_id : undefined,
+        },
+      },
+    };
+
+    if (charge_type_id) {
+      whereCondition.charge_type_id = charge_type_id;
+    }
+
     return await this.prismaService.charge_types.findMany({
-      where: {
-        program_id: programId,
+      where: whereCondition,
+      include: {
+        charge_type_applicability: true,
       },
     });
   }
 
-  async createChargeForStudent(data: any) {
+  async createChargeForStudent(data: CreateForStudentChargeRepositoryDto) {
+    const studentTransactionBalance = await this.getStudentTransactionsBalance(
+      data.student_id,
+    );
+
     try {
       //create a prisma transaction, to create a charge for a student and update the student balance
       const charge = await this.prismaService.$transaction([
@@ -154,24 +193,105 @@ export class ChargesRepository {
           },
         }),
 
-        this.prismaService.student_balance.upsert({
-          where: {
+        this.prismaService.student_balance_transactions.create({
+          data: {
             student_id: data.student_id,
-          },
-          create: {
-            student_id: data.student_id,
-            balance: data.original_amount,
-          },
-          update: {
-            balance: {
-              increment: data.original_amount,
-            },
+            amount: data.original_amount,
+            reference_id: data.charge_type_id,
+            transaction_type: StudentBalanceTransaction.DEBIT,
+            description: `Charge created for student ${data.student_id}`,
+            previous_balance:
+              studentTransactionBalance.studentTransactionBalance,
+            new_balance:
+              studentTransactionBalance.studentTransactionBalance +
+              data.original_amount,
           },
         }),
       ]);
+
       return charge;
     } catch (error) {
       console.log(error);
+      this.handleError(error);
+    }
+  }
+
+  async createChargesForStudents(data: CreateForStudentsChargeDto) {
+    try {
+      // Obtener balances de todos los estudiantes en una sola consulta
+      const studentBalances = await Promise.all(
+        data.student_ids.map((studentId) =>
+          this.getStudentTransactionsBalance(studentId),
+        ),
+      );
+
+      const balanceMap = new Map();
+      data.student_ids.forEach((studentId, index) => {
+        balanceMap.set(
+          studentId,
+          studentBalances[index].studentTransactionBalance,
+        );
+      });
+
+      const result = await this.prismaService.$transaction(async (prisma) => {
+        // 1. Crear todos los cargos usando createMany para mejor rendimiento
+        await prisma.charges.createMany({
+          data: data.student_ids.map((studentId) => ({
+            student_id: studentId,
+            charge_type_id: data.charge_type_id,
+            original_amount: data.original_amount,
+            current_amount: data.original_amount,
+            due_date: data.due_date,
+            charge_status_id: ChargeStatuses.PENDING,
+            description: data.description,
+          })),
+        });
+
+        // 2. Crear todas las transacciones de balance
+        await prisma.student_balance_transactions.createMany({
+          data: data.student_ids.map((studentId) => {
+            const previousBalance = balanceMap.get(studentId) || 0;
+            return {
+              student_id: studentId,
+              amount: data.original_amount,
+              reference_id: data.charge_type_id,
+              transaction_type: StudentBalanceTransaction.DEBIT,
+              description: `Bulk charge created for student ${studentId}`,
+              previous_balance: previousBalance,
+              new_balance: previousBalance + data.original_amount,
+            };
+          }),
+        });
+
+        // Retornar los cargos creados
+        return await prisma.charges.findMany({
+          where: {
+            student_id: { in: data.student_ids },
+            charge_type_id: data.charge_type_id,
+            created_at: {
+              gte: new Date(Date.now() - 5000), // Últimos 5 segundos
+            },
+          },
+          include: {
+            charge_types: {
+              select: {
+                name: true,
+                description: true,
+              },
+            },
+            students: {
+              select: {
+                first_name: true,
+                last_name: true,
+                student_id: true,
+              },
+            },
+          },
+        });
+      });
+
+      return result;
+    } catch (error) {
       this.handleError(error);
     }
   }
@@ -235,9 +355,14 @@ export class ChargesRepository {
           },
         },
       },
-      orderBy: {
-        created_at: 'desc',
-      },
+      orderBy: [
+        {
+          due_date: 'desc',
+        },
+        {
+          current_amount: 'desc',
+        },
+      ],
     });
 
     return studentCharges;
@@ -257,29 +382,19 @@ export class ChargesRepository {
     });
   }
 
-  async getChargesApplyToStudent(query: {
-    student_type_id?: string;
-    program_id?: string;
-    program_level_id?: string;
-  }) {
+  async getChargesApplyToStudent(query: { program_ids?: string[] }) {
     return await this.prismaService.charge_types.findMany({
       where: {
-        charge_type_applicability: {
-          some: {
-            OR: [
-              {
-                // Specific charges that match the given criteria
-                program_level_id: query.program_level_id,
-                student_type_id: query.student_type_id,
-              },
-              {
-                // Global charges
-                student_type_id: null,
-                program_level_id: null,
-              },
-            ],
+        OR: [
+          {
+            program_id: {
+              in: query.program_ids || [],
+            },
           },
-        },
+          {
+            program_id: null, // Include charges that apply to all programs
+          },
+        ],
       },
     });
   }
@@ -348,12 +463,35 @@ export class ChargesRepository {
       amountOfCreditNote: number;
     },
   ) {
-    //If due_date and description are not present, update only the current_amount of the charge and the student balance, if the balanceAdjustment is greater than 0, increment the balance, otherwise decrement it. Create a prisma transaction to update the charge and the student balance
+    //If due_date and description are not present, update only the current_amount of the charge and the student balance, if the balanceAdjustment is greater than 0, increment the balance, otherwise decrement it.
+    //Create a prisma transaction to update the charge and the student balance
+    //If amountOfCreditNote is greater than 0, create a credit note for the student
 
-    //if amountOfCreditNote is greater than 0, create a credit note for the student
+    const previousCharge = await this.prismaService.charges.findUnique({
+      where: {
+        charge_id: chargeId,
+      },
+      select: {
+        current_amount: true,
+      },
+    });
 
-    return await this.prismaService.$transaction([
-      this.prismaService.charges.update({
+    const studentTransactionBalance = await this.getStudentTransactionsBalance(
+      updateChargeDto.student_id,
+    );
+
+    return await this.prismaService.$transaction(async (prisma) => {
+      await prisma.charge_history.create({
+        data: {
+          charge_id: chargeId,
+          field_changed: 'current_amount',
+          old_value: previousCharge.current_amount.toString(),
+          new_value: updateChargeDto.current_amount.toString(),
+          change_reason: 'Charge updated by user',
+        },
+      });
+
+      await prisma.charges.update({
         where: {
           charge_id: chargeId,
         },
@@ -362,41 +500,49 @@ export class ChargesRepository {
           due_date: updateChargeDto.due_date,
           description: updateChargeDto.description,
         },
-      }),
-      this.prismaService.student_balance.update({
-        where: {
-          student_id: updateChargeDto.student_id,
-        },
+      });
+
+      //if balance adjustment is negative, it means that the student has a credit note
+      //if balance adjustment is positive, it means that the student has to pay more
+
+      await prisma.student_balance_transactions.create({
         data: {
-          balance: {
-            [updateChargeDto.balanceAdjustment > 0 ? 'increment' : 'decrement']:
-              Math.abs(updateChargeDto.balanceAdjustment),
-          },
+          student_id: updateChargeDto.student_id,
+          amount: updateChargeDto.balanceAdjustment,
+          reference_id: chargeId,
+          transaction_type:
+            updateChargeDto.balanceAdjustment > 0
+              ? StudentBalanceTransaction.DEBIT
+              : StudentBalanceTransaction.CREDIT,
+          description: updateChargeDto.description,
+          previous_balance: studentTransactionBalance.studentTransactionBalance,
+          new_balance:
+            studentTransactionBalance.studentTransactionBalance +
+            updateChargeDto.balanceAdjustment,
         },
-      }),
-      ...(updateChargeDto.amountOfCreditNote > 0
-        ? [
-            this.prismaService.payments.create({
-              data: {
-                student_id: updateChargeDto.student_id,
-                payment_method_id: PaymentMethodConstants.CREDIT_NOTE,
-                reference_number: 'Credit Note',
-                amount: -updateChargeDto.amountOfCreditNote,
-                payment_date: new Date(),
-                payment_details: {
-                  create: [
-                    {
-                      charge_id: chargeId,
-                      applied_amount: -updateChargeDto.amountOfCreditNote,
-                      description: 'Credit Note',
-                    },
-                  ],
+      });
+
+      if (updateChargeDto.amountOfCreditNote > 0) {
+        await prisma.payments.create({
+          data: {
+            student_id: updateChargeDto.student_id,
+            payment_method_id: PaymentMethodConstants.CREDIT_NOTE,
+            reference_number: 'Credit Note',
+            amount: -updateChargeDto.amountOfCreditNote,
+            payment_date: new Date(),
+            payment_details: {
+              create: [
+                {
+                  charge_id: chargeId,
+                  applied_amount: -updateChargeDto.amountOfCreditNote,
+                  description: 'Credit Note',
                 },
-              },
-            }),
-          ]
-        : []),
-    ]);
+              ],
+            },
+          },
+        });
+      }
+    });
   }
 
   async totalAmountOwedAndBalance(studentId: string): Promise<{
@@ -420,18 +566,44 @@ export class ChargesRepository {
       totalAmountOwedResult._sum.current_amount ?? 0,
     );
 
-    const studentBalance = await this.prismaService.student_balance.findUnique({
-      where: {
-        student_id: studentId,
-      },
-      select: {
-        balance: true,
-      },
-    });
+    const { studentTransactionBalance } =
+      await this.getStudentTransactionsBalance(studentId);
 
     return {
       totalAmountOwedWithoutPayments,
-      studentBalance: Number(studentBalance?.balance ?? 0),
+      studentBalance: studentTransactionBalance,
+    };
+  }
+
+  /* Get the total amount owed by the student and the student balance
+   * @param studentId - The ID of the student
+   * @returns An object containing the student's transaction balance. If the balance is positive, it indicate that the student has debt, if it is negative, it indicates that the student has credit.
+   * @throws BadRequestException if an error occurs during the operation
+   * @example
+   * const balance = await chargesRepository.getStudentTransactionsBalance('student-id-123');
+   * // balance will be an object like { studentTransactionBalance: 100 }
+   */
+
+  async getStudentTransactionsBalance(studentId: string) {
+    // Get the total amount owed by the student and the student balance
+    const totalAmountOwedResult =
+      await this.prismaService.student_balance_transactions.aggregate({
+        where: {
+          student_id: studentId,
+        },
+        _sum: {
+          amount: true,
+        },
+      });
+
+    const studentTransactionBalance = Number(
+      totalAmountOwedResult._sum.amount ?? 0,
+    );
+
+    return {
+      studentTransactionBalance,
+      owesAmount: studentTransactionBalance > 0,
+      hasCreditNote: studentTransactionBalance < 0,
     };
   }
 
@@ -458,12 +630,10 @@ export class ChargesRepository {
       // Add program filter only if programs array is not empty
       if (programs.length > 0) {
         whereCondition.students = {
-          student_grades: {
+          student_programs: {
             some: {
-              program_levels: {
-                program_id: {
-                  in: programs,
-                },
+              program_id: {
+                in: programs,
               },
             },
           },

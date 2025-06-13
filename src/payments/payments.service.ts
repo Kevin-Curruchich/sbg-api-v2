@@ -13,7 +13,11 @@ import { PaymentsRepository } from './payments.repository';
 
 import { ChargeStatuses } from 'src/common/constants/charge-status.constant';
 
-import { CreateStudentPaymentDto } from './dto/create-student-payment.dto';
+import {
+  CreateStudentAutomatizedPaymentDto,
+  CreateStudentPaymentDto,
+  CreateStudentsPaymentDto,
+} from './dto/create-student-payment.dto';
 import { GetStudentPaymentsDto } from './dto/get-student-payments.dto';
 import { GetPaymentQueryDto } from './dto/get-payment-query.dto';
 
@@ -89,6 +93,115 @@ export class PaymentsService {
     return paymentCreated;
   }
 
+  async createAutomatizedPayment(
+    createPaymentDto: CreateStudentAutomatizedPaymentDto,
+  ) {
+    const { amount } = createPaymentDto;
+
+    if (amount <= 0) {
+      throw new Error('Payment amount must be greater than zero');
+    }
+
+    let amountToApplyToCharges = amount;
+
+    const studentCharges = await this.chargesService.getChargesByStudentId(
+      createPaymentDto.student_id,
+      {
+        charge_status_id: ChargeStatuses.PENDING,
+      },
+    );
+
+    if (studentCharges.length === 0) {
+      throw new Error('No pending charges found for the student');
+    }
+
+    const paymentDetails = [];
+
+    for (const charge of studentCharges) {
+      if (amountToApplyToCharges <= 0) break;
+
+      const chargeAmount = Number(charge.current_amount);
+      const amountToApply = Math.min(amountToApplyToCharges, chargeAmount);
+
+      paymentDetails.push({
+        charge_id: charge.charge_id,
+        applied_amount: amountToApply,
+        is_from_credit_balance: false,
+        description: `Pago automatizado para ${charge.charge_types.name}`,
+      });
+
+      amountToApplyToCharges -= amountToApply;
+    }
+
+    return this.createStudentPayment({
+      student_id: createPaymentDto.student_id,
+      amount: amount,
+      payment_method_id: createPaymentDto.payment_method_id,
+      reference_number: createPaymentDto.reference_number,
+      payment_date: createPaymentDto.payment_date,
+      payment_details: paymentDetails,
+    });
+  }
+
+  async spreadStudentPositiveBalanceToCharges(studentId: string) {
+    const studentCharges = await this.chargesService.getChargesByStudentId(
+      studentId,
+      {
+        charge_status_id: ChargeStatuses.PENDING,
+      },
+    );
+
+    if (studentCharges.length === 0) {
+      throw new Error('No pending charges found for the student');
+    }
+
+    const studentBalance =
+      await this.chargesService.getStudentBalance(studentId);
+
+    if (!studentBalance.studentHasCredit) {
+      throw new Error('No positive balance to spread to charges');
+    }
+
+    let remainingBalance = studentBalance.studentCredit;
+
+    const paymentDetails = [];
+
+    for (const charge of studentCharges) {
+      if (remainingBalance <= 0) break;
+
+      const chargeAmount = Number(charge.current_amount);
+      const amountToApply = Math.min(remainingBalance, chargeAmount);
+
+      paymentDetails.push({
+        charge_id: charge.charge_id,
+        applied_amount: amountToApply,
+        is_from_credit_balance: true,
+        description: `Saldo a favor aplicado a ${charge.charge_types.name}`,
+      });
+
+      remainingBalance -= amountToApply;
+    }
+
+    return {
+      message: 'Positive balance spread to charges successfully',
+      remainingBalance,
+    };
+  }
+
+  async createPaymentsForStudents(
+    createStudentsPayment: CreateStudentsPaymentDto,
+  ) {
+    const paymentsToCreate = {
+      ...createStudentsPayment,
+      payment_date: dayjs(createStudentsPayment.payment_date).toDate(),
+    };
+
+    const paymentsCreated =
+      await this.paymentsRepository.createPaymentsForStudents(paymentsToCreate);
+
+    return paymentsCreated;
+  }
+
   async getAllPaymentsWithoutPagination(
     queryParams: PaymentReportsDto,
     user: User,
@@ -123,20 +236,18 @@ export class PaymentsService {
   ) {
     const programs = user.admin_programs.map((program) => program.program_id);
 
-    const queryWithDates = {
-      ...queryParams,
+    if (queryParams.payment_date_start) {
+      queryParams.payment_date_start = dayjs(
+        queryParams.payment_date_start,
+      ).toDate();
 
-      payment_date_start: dayjs(queryParams.payment_date_start)
-        .startOf('day')
-        .toDate(),
-      payment_date_end: dayjs(queryParams.payment_date_end)
+      queryParams.payment_date_end = dayjs(queryParams.payment_date_end)
         .endOf('day')
-        .toDate(),
-    };
-    // payment_date_end: dayjs(queryParams.payment_date).endOf('month').toDate(),
+        .toDate();
+    }
 
     const { data, total } = await this.paymentsRepository.getAllPayments(
-      queryWithDates,
+      queryParams,
       programs,
       settings,
     );

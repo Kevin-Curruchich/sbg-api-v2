@@ -1,22 +1,30 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
-import { PrismaService } from 'src/prisma/prisma.service';
-import { CreateStudentPaymentDto } from './dto/create-student-payment.dto';
-import { GetStudentPaymentsRepository } from './dto/get-student-payments.dto';
 import { Prisma } from '@prisma/client';
-import { PaymentReportsDto } from 'src/reports/dto/payments-reports.dto';
+
 import * as dayjs from 'dayjs';
+
+import { PrismaService } from 'src/prisma/prisma.service';
+import {
+  CreateStudentPaymentDto,
+  CreateStudentsPaymentDto,
+} from './dto/create-student-payment.dto';
+import { GetStudentPaymentsRepository } from './dto/get-student-payments.dto';
+import { PaymentReportsDto } from 'src/reports/dto/payments-reports.dto';
 
 @Injectable()
 export class PaymentsRepository {
   constructor(private readonly prismaService: PrismaService) {}
 
   async createStudentPayment(data: CreateStudentPaymentDto) {
-    const { is_from_credit_balance } = data;
-
     try {
-      //create a new prisma transaction, create a new payment, and create the payment details for finish to update the student balance
+      // Obtener balance actual antes de la transacción
+      const currentBalance = await this.getStudentTransactionsBalance(
+        data.student_id,
+      );
+
       const payment = await this.prismaService.$transaction(async (prisma) => {
-        const createdPayment = prisma.payments.create({
+        // 1. Crear el pago con sus detalles
+        const createdPayment = await prisma.payments.create({
           data: {
             student_id: data.student_id,
             payment_method_id: data.payment_method_id,
@@ -24,7 +32,11 @@ export class PaymentsRepository {
             amount: data.amount,
             payment_date: data.payment_date,
             payment_details: {
-              create: data.payment_details,
+              create: data.payment_details.map((detail) => ({
+                charge_id: detail.charge_id,
+                applied_amount: detail.applied_amount,
+                description: detail.description,
+              })),
             },
           },
           include: {
@@ -49,17 +61,84 @@ export class PaymentsRepository {
           },
         });
 
-        if (!is_from_credit_balance) {
-          await prisma.student_balance.update({
-            where: {
-              student_id: data.student_id,
-            },
+        // 2. Lógica de balance - verificar si hay pagos desde crédito
+        const includeAmountFromBalance = data.payment_details.some(
+          (detail) => detail.is_from_credit_balance,
+        );
+
+        if (!includeAmountFromBalance) {
+          // Calcular monto que no viene del balance de crédito
+          const totalAmountNotFromCreditBalance = data.payment_details
+            .filter((detail) => !detail.is_from_credit_balance)
+            .reduce((acc, detail) => acc + detail.applied_amount, 0);
+
+          let amountToApplyOnBalance = totalAmountNotFromCreditBalance;
+
+          const differenceAmounts =
+            data.amount - totalAmountNotFromCreditBalance;
+
+          if (differenceAmounts !== 0) {
+            // Si el monto total del pago es mayor que el total de los detalles,
+            // aplicamos la diferencia al balance del estudiante
+            amountToApplyOnBalance += differenceAmounts;
+          }
+
+          // 3. ✅ CREAR TRANSACCIÓN DE BALANCE (CREDIT)
+          await prisma.student_balance_transactions.create({
             data: {
-              balance: {
-                decrement: data.amount,
-              },
+              student_id: data.student_id,
+              amount: -amountToApplyOnBalance, // ✅ NEGATIVO porque es un CREDIT (reduce deuda)
+              reference_id: createdPayment.payment_id,
+              transaction_type: 'CREDIT', // ✅ CREDIT porque es un pago
+              description: `Payment received: ${data.reference_number || 'No reference'}`,
+              previous_balance: currentBalance.studentTransactionBalance,
+              new_balance:
+                currentBalance.studentTransactionBalance -
+                amountToApplyOnBalance,
             },
           });
+        } else {
+          // 5. ✅ MANEJAR PAGOS DESDE BALANCE DE CRÉDITO
+          // Si algunos pagos vienen del balance de crédito, solo actualizamos los cargos
+          // pero no creamos nueva transacción de balance
+          await Promise.all(
+            data.payment_details
+              .filter((detail) => !detail.is_from_credit_balance)
+              .map((detail) =>
+                prisma.charges.update({
+                  where: { charge_id: detail.charge_id },
+                  data: {
+                    current_amount: {
+                      decrement: detail.applied_amount,
+                    },
+                  },
+                }),
+              ),
+          );
+
+          // Si hay diferencia en el monto y no todo viene del crédito
+          const totalAmountNotFromCreditBalance = data.payment_details
+            .filter((detail) => !detail.is_from_credit_balance)
+            .reduce((acc, detail) => acc + detail.applied_amount, 0);
+
+          const differenceAmounts =
+            data.amount - totalAmountNotFromCreditBalance;
+
+          if (differenceAmounts > 0) {
+            // Crear transacción solo por la diferencia
+            await prisma.student_balance_transactions.create({
+              data: {
+                student_id: data.student_id,
+                amount: -differenceAmounts,
+                reference_id: createdPayment.payment_id,
+                transaction_type: 'CREDIT',
+                description: `Payment difference applied: ${data.reference_number || 'No reference'}`,
+                previous_balance: currentBalance.studentTransactionBalance,
+                new_balance:
+                  currentBalance.studentTransactionBalance - differenceAmounts,
+              },
+            });
+          }
         }
 
         return createdPayment;
@@ -67,8 +146,87 @@ export class PaymentsRepository {
 
       return payment;
     } catch (error) {
-      console.log(error);
+      console.log('Error creating student payment:', error);
+      throw error;
     }
+  }
+
+  async createPaymentsForStudents(
+    createStudentPaymentsDto: CreateStudentsPaymentDto,
+  ) {
+    // Validar que todos los estudiantes existen
+    const students = await this.prismaService.students.findMany({
+      where: {
+        student_id: {
+          in: createStudentPaymentsDto.student_ids,
+        },
+      },
+    });
+
+    if (students.length !== createStudentPaymentsDto.student_ids.length) {
+      throw new BadRequestException('Some students not found');
+    }
+
+    const totalAmount = createStudentPaymentsDto.amount;
+    const amountPerStudent =
+      totalAmount / createStudentPaymentsDto.student_ids.length;
+
+    // Obtener balances actuales de todos los estudiantes
+    const studentBalances = await Promise.all(
+      createStudentPaymentsDto.student_ids.map((studentId) =>
+        this.getStudentTransactionsBalance(studentId),
+      ),
+    );
+
+    const balanceMap = new Map();
+    createStudentPaymentsDto.student_ids.forEach((studentId, index) => {
+      balanceMap.set(
+        studentId,
+        studentBalances[index].studentTransactionBalance,
+      );
+    });
+
+    // ✅ USAR TRANSACCIONES PARA ATOMICIDAD
+    await this.prismaService.$transaction(async (prisma) => {
+      // 1. Crear pagos para cada estudiante
+      await Promise.all(
+        createStudentPaymentsDto.student_ids.map((studentId) =>
+          prisma.payments.create({
+            data: {
+              student_id: studentId,
+              amount: amountPerStudent,
+              payment_date: createStudentPaymentsDto.payment_date,
+              payment_method_id: createStudentPaymentsDto.payment_method_id,
+              reference_number: createStudentPaymentsDto.reference_number,
+            },
+          }),
+        ),
+      );
+
+      // 2. ✅ CREAR TRANSACCIONES DE BALANCE PARA CADA ESTUDIANTE
+      await Promise.all(
+        createStudentPaymentsDto.student_ids.map((studentId) => {
+          const currentBalance = balanceMap.get(studentId) || 0;
+          return prisma.student_balance_transactions.create({
+            data: {
+              student_id: studentId,
+              amount: -amountPerStudent, // ✅ NEGATIVO porque es CREDIT
+              reference_id: createStudentPaymentsDto.payment_method_id,
+              transaction_type: 'CREDIT',
+              description: `BULK-${Date.now()}-${studentId.slice(-4)}`,
+              previous_balance: currentBalance,
+              new_balance: currentBalance - amountPerStudent,
+            },
+          });
+        }),
+      );
+    });
+
+    return {
+      message: 'Payments created successfully',
+      amountPerStudent,
+      studentsAffected: createStudentPaymentsDto.student_ids.length,
+    };
   }
 
   async getPaymentsByChargeId(studentChargeId: string) {
@@ -321,43 +479,76 @@ export class PaymentsRepository {
       throw new BadRequestException('Payment not found');
     }
 
+    // Obtener balance actual antes del reverso
+    const currentBalance = await this.getStudentTransactionsBalance(
+      payment.student_id,
+    );
+
     try {
-      const paymentDeleted = await this.prismaService.$transaction([
-        this.prismaService.payments.delete({
-          where: {
-            payment_id: paymentId,
-          },
-          include: {
-            payment_details: {
-              select: {
-                charges: {
-                  select: {
-                    charge_types: {
-                      select: {
-                        name: true,
+      const paymentDeleted = await this.prismaService.$transaction(
+        async (prisma) => {
+          // 1. Eliminar el pago
+          const deletedPayment = await prisma.payments.delete({
+            where: {
+              payment_id: paymentId,
+            },
+            include: {
+              payment_details: {
+                select: {
+                  charges: {
+                    select: {
+                      charge_id: true,
+                      charge_types: {
+                        select: {
+                          name: true,
+                        },
                       },
                     },
                   },
+                  applied_amount: true,
                 },
-                applied_amount: true,
               },
             },
-          },
-        }),
-        this.prismaService.student_balance.update({
-          where: {
-            student_id: payment.student_id,
-          },
-          data: {
-            balance: {
-              increment: payment.amount,
+          });
+
+          // 2. ✅ CREAR TRANSACCIÓN DE REVERSO
+          await prisma.student_balance_transactions.create({
+            data: {
+              student_id: payment.student_id,
+              amount: Number(payment.amount), // ✅ POSITIVO porque revierte el pago (aumenta deuda)
+              reference_id: paymentId,
+              transaction_type: 'DEBIT', // ✅ DEBIT porque revierte un pago
+              description: `Payment reversal: ${payment.reference_number || paymentId}`,
+              previous_balance: currentBalance.studentTransactionBalance,
+              new_balance:
+                currentBalance.studentTransactionBalance +
+                Number(payment.amount),
             },
-          },
-        }),
-      ]);
+          });
+
+          // 3. ✅ RESTAURAR MONTOS DE LOS CARGOS
+          if (deletedPayment.payment_details?.length > 0) {
+            await Promise.all(
+              deletedPayment.payment_details.map((detail) =>
+                prisma.charges.update({
+                  where: { charge_id: detail.charges.charge_id },
+                  data: {
+                    current_amount: {
+                      increment: detail.applied_amount,
+                    },
+                  },
+                }),
+              ),
+            );
+          }
+
+          return deletedPayment;
+        },
+      );
 
       return paymentDeleted;
     } catch (error) {
+      console.log('Error deleting payment:', error);
       throw new BadRequestException('Error deleting payment');
     }
   }
@@ -378,12 +569,10 @@ export class PaymentsRepository {
 
     if (programs.length > 0) {
       where.students = {
-        student_grades: {
+        student_programs: {
           some: {
-            program_levels: {
-              program_id: {
-                in: programs,
-              },
+            program_id: {
+              in: programs,
             },
           },
         },
@@ -403,5 +592,19 @@ export class PaymentsRepository {
     );
 
     return total;
+  }
+
+  async getStudentTransactionsBalance(studentId: string) {
+    const result =
+      await this.prismaService.student_balance_transactions.aggregate({
+        where: { student_id: studentId },
+        _sum: { amount: true },
+      });
+
+    const balance = Number(result._sum.amount ?? 0);
+
+    return {
+      studentTransactionBalance: balance,
+    };
   }
 }

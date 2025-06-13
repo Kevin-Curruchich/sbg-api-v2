@@ -10,18 +10,25 @@ import {
 } from '@nestjs/common';
 import { ApiBearerAuth } from '@nestjs/swagger';
 
+import { Public } from 'src/auth/decorators/public.decorator';
+
+import { GetUser } from 'src/auth/decorators/get-user.decorator';
 import { Auth } from 'src/auth/decorators/auth.decorator';
 import { ValidRoles } from 'src/auth/interfaces';
+import User from 'src/auth/interfaces/user.interface';
 
 import { ChargesService } from './charges.service';
 import { CreateChargeDto } from './dto/create-charge.dto';
-import { CreateForStudentChargeDto } from './dto/create-charge-for-student.dto';
+import {
+  CreateForStudentChargeDto,
+  CreateForStudentsChargeDto,
+} from './dto/create-charge-for-student.dto';
 import { StudentChargesQueryDto } from './dto/student-charges-query.dto';
-import { GetChargesCreated } from './dto/get-charges-created.dto';
+import {
+  GetChargesAppliedToStudentsByFiltersDto,
+  GetChargesCreated,
+} from './dto/get-charges-created.dto';
 import { UpdateStudentChargeDto } from './dto/update-student-charge.dto';
-import { GetUser } from 'src/auth/decorators/get-user.decorator';
-import User from 'src/auth/interfaces/user.interface';
-import { Public } from 'src/auth/decorators/public.decorator';
 
 @Controller('charges')
 @Auth(ValidRoles.admin, ValidRoles.superuser)
@@ -37,6 +44,13 @@ export class ChargesController {
   @Post('student')
   createChargeForStudent(@Body() createChargeDto: CreateForStudentChargeDto) {
     return this.chargesService.createChargeForStudent(createChargeDto);
+  }
+
+  @Post('students')
+  createChargesForStudents(
+    @Body() createChargeDto: CreateForStudentsChargeDto,
+  ) {
+    return this.chargesService.createChargesForStudents(createChargeDto);
   }
 
   @Get('apply/student/:studentId')
@@ -63,9 +77,11 @@ export class ChargesController {
     return this.chargesService.getAllCharges(query, user);
   }
 
-  @Get('program')
-  getChargeTypesByProgramId(@Query('programId') programId: string) {
-    return this.chargesService.getChargeTypesByProgramId(programId);
+  @Get('list')
+  getChargesApplyToStudentsByFilters(
+    @Query() programId: GetChargesAppliedToStudentsByFiltersDto,
+  ) {
+    return this.chargesService.getChargesApplyToStudentsByFilters(programId);
   }
 
   @Get('statuses')

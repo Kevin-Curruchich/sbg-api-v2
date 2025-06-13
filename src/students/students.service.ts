@@ -1,23 +1,31 @@
-import { Injectable } from '@nestjs/common';
-import { StudentsRepository } from './students.repository';
-import { CreateStudentDto } from './dto/create-student.dto';
-import { UpdateStudentDto } from './dto/update-student.dto';
-
-import { StudentStatusConstant } from 'src/common/constants/student-status.constant';
+import { ConflictException, Injectable } from '@nestjs/common';
 
 import * as dayjs from 'dayjs';
-//days
+
+import User from 'src/auth/interfaces/user.interface';
+import { ValidRoles } from 'src/auth/interfaces';
+
+import { ProgramsService } from '../programs/programs.service';
+import { StudentStatusConstant } from 'src/common/constants/student-status.constant';
+
+import { StudentsRepository } from './students.repository';
+import {
+  AssignStudentToProgramDto,
+  CreateStudentDto,
+} from './dto/create-student.dto';
+import { UpdateStudentDto } from './dto/update-student.dto';
 
 import {
   GetStudentsPaginationQueryDto,
   GetStudentsQueryDto,
 } from './dto/get-students-query.dto';
-import User from 'src/auth/interfaces/user.interface';
-import { ValidRoles } from 'src/auth/interfaces';
 
 @Injectable()
 export class StudentService {
-  constructor(private readonly studentRepository: StudentsRepository) {}
+  constructor(
+    private readonly studentRepository: StudentsRepository,
+    private readonly programsService: ProgramsService,
+  ) {}
 
   async createStudent(createStudentDto: CreateStudentDto) {
     try {
@@ -27,11 +35,56 @@ export class StudentService {
         student_status_id: StudentStatusConstant.ACTIVE,
       };
 
-      await this.studentRepository.createStudent(studentData);
+      return await this.studentRepository.createStudent(studentData);
     } catch (error) {
       console.error('Error creating student:', error);
       throw new Error('Failed to create student');
     }
+  }
+
+  async updateStudent(studentId: string, updateStudentDto: UpdateStudentDto) {
+    const student = await this.studentRepository.getStudentById(studentId);
+
+    if (!student) {
+      throw new ConflictException(
+        `Student with ID ${studentId} does not exist.`,
+      );
+    }
+
+    return await this.studentRepository.updateStudent(
+      studentId,
+      updateStudentDto,
+    );
+  }
+
+  async inactivateStudent(studentId: string) {
+    const student = await this.studentRepository.getStudentById(studentId);
+
+    if (!student) {
+      throw new ConflictException(
+        `Student with ID ${studentId} does not exist.`,
+      );
+    }
+
+    return await this.studentRepository.changeStudentStatus(
+      studentId,
+      StudentStatusConstant.INACTIVE,
+    );
+  }
+
+  async reactivateStudent(studentId: string) {
+    const student = await this.studentRepository.getStudentById(studentId);
+
+    if (!student) {
+      throw new ConflictException(
+        `Student with ID ${studentId} does not exist.`,
+      );
+    }
+
+    return await this.studentRepository.changeStudentStatus(
+      studentId,
+      StudentStatusConstant.ACTIVE,
+    );
   }
 
   async getAllStudents(
@@ -59,6 +112,12 @@ export class StudentService {
     );
   }
 
+  async getStudentsCreatedByYear(
+    currentYear: number = new Date().getFullYear(),
+  ) {
+    return await this.studentRepository.getStudentsCreatedByYear(currentYear);
+  }
+
   async getStudentTypes(user: User) {
     let options = null;
 
@@ -74,40 +133,11 @@ export class StudentService {
   async getStudentById(id: string) {
     const studentData = await this.studentRepository.getStudentById(id);
 
-    const groupedGrades = Object.values(
-      studentData.student_grades.reduce((acc, grade) => {
-        const program = grade.program_levels.programs;
-        if (!program) return acc;
-
-        const programId = program.program_id;
-        if (!acc[programId]) {
-          acc[programId] = {
-            program_id: programId,
-            program_name: program.name,
-            grades: [],
-          };
-        }
-
-        acc[programId].grades.push({
-          program_level_id: grade.program_levels.program_level_id,
-          program_level_name: grade.program_levels.name,
-          created_at: dayjs(grade.program_levels.created_at).format(
-            'MMMM DD, YYYY',
-          ),
-        });
-
-        return acc;
-      }, {}),
-    );
-
     const data = {
       ...studentData,
       birthday: dayjs(studentData.birthday).format('YYYY-MM-DD'),
       birthdayFormatted: dayjs(studentData.birthday).format('MMMM DD, YYYY'),
-      groupedGrades,
     };
-
-    delete data.student_grades;
 
     return data;
   }
@@ -127,12 +157,12 @@ export class StudentService {
     return this.studentRepository.getLastStudentGrade(studentId);
   }
 
-  getStudentGeneralInfo(studentId: string) {
-    return this.studentRepository.getStudentGeneralInfo(studentId);
+  getStudentGrades(studentId: string) {
+    return this.studentRepository.getStudentPrograms(studentId);
   }
 
-  update(id: number, updateStudentDto: UpdateStudentDto) {
-    return `This action updates a #${id} student`;
+  getStudentGeneralInfo(studentId: string) {
+    return this.studentRepository.getStudentGeneralInfo(studentId);
   }
 
   async getStudentsCount(programs: string[]) {

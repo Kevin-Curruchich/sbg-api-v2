@@ -11,12 +11,18 @@ import User from 'src/auth/interfaces/user.interface';
 import { CreateChargeDto } from './dto/create-charge.dto';
 import { UpdateStudentChargeDto } from './dto/update-student-charge.dto';
 
-import { CreateForStudentChargeDto } from './dto/create-charge-for-student.dto';
+import {
+  CreateForStudentChargeDto,
+  CreateForStudentsChargeDto,
+} from './dto/create-charge-for-student.dto';
 
 import { ChargesRepository } from './charges.repository';
 import { ChargeStatuses } from 'src/common/constants/charge-status.constant';
 import { StudentChargesQueryDto } from './dto/student-charges-query.dto';
-import { GetChargesCreated } from './dto/get-charges-created.dto';
+import {
+  GetChargesAppliedToStudentsByFiltersDto,
+  GetChargesCreated,
+} from './dto/get-charges-created.dto';
 
 @Injectable()
 export class ChargesService {
@@ -38,6 +44,16 @@ export class ChargesService {
     };
 
     return this.chargesRepository.createChargeForStudent(data);
+  }
+
+  createChargesForStudents(createChargeDto: CreateForStudentsChargeDto) {
+    const data = {
+      ...createChargeDto,
+      current_amount: createChargeDto.original_amount,
+      due_date: dayjs(createChargeDto.due_date).toDate(),
+    };
+
+    return this.chargesRepository.createChargesForStudents(data);
   }
 
   async getAllCharges(query: GetChargesCreated, user: User) {
@@ -86,8 +102,12 @@ export class ChargesService {
     };
   }
 
-  getChargeTypesByProgramId(programId: string) {
-    return this.chargesRepository.getChargesByProgramId(programId);
+  getChargesApplyToStudentsByFilters(
+    queryParams: GetChargesAppliedToStudentsByFiltersDto,
+  ) {
+    return this.chargesRepository.getChargesApplyToStudentsByFilters(
+      queryParams,
+    );
   }
 
   getChargeStatuses() {
@@ -155,17 +175,12 @@ export class ChargesService {
   }
 
   async getChargesApplyToStudent(studentId: string) {
-    const student = await this.studentsService.getStudentGeneralInfo(studentId);
-    const studentGrade =
-      await this.studentsService.getLastStudentGrade(studentId);
+    const studentGrade = await this.studentsService.getStudentGrades(studentId);
 
-    const { student_types } = student;
-
-    const lastProgramStudent = studentGrade;
+    const program_ids = studentGrade.map((grade) => grade.programs.program_id);
 
     return await this.chargesRepository.getChargesApplyToStudent({
-      student_type_id: student_types.student_type_id,
-      program_level_id: lastProgramStudent.program_levels.program_level_id,
+      program_ids,
     });
   }
 
@@ -191,6 +206,10 @@ export class ChargesService {
     if (originalChargePayed > new_amount) {
       amountOfCreditNote = originalChargePayed - new_amount;
     }
+
+    //Balance adjustment is the difference between the new amount and the original amount
+    //if balance adjustment is negative, it means that the student has a credit note
+    //if balance adjustment is positive, it means that the student has to pay more
 
     const data = {
       student_id: originalCharge.student_id,
@@ -255,11 +274,6 @@ export class ChargesService {
       totalCharges: formatCurrency(result.totalCharges),
       totalPaid: formatCurrency(result.totalPaid),
       collectionRate: result.collectionRate.toFixed(2) + '%',
-      rawData: {
-        totalCharges: result.totalCharges,
-        totalPaid: result.totalPaid,
-        collectionRate: result.collectionRate,
-      },
     };
   }
 
