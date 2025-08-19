@@ -12,6 +12,7 @@ import { PaymentAssistantModule } from './payment-assistant/payment-assistant.mo
 import { ReportsModule } from './reports/reports.module';
 import { GeneralModule } from './general/general.module';
 import { GradesModule } from './grades/grades.module';
+import { TermsModule } from './terms/terms.module';
 
 @Module({
   controllers: [AppController],
@@ -28,6 +29,7 @@ import { GradesModule } from './grades/grades.module';
     ReportsModule,
     GeneralModule,
     GradesModule,
+    TermsModule,
   ],
 })
 export class AppModule {}

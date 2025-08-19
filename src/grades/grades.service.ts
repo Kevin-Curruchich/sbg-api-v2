@@ -1,6 +1,7 @@
 import { ConflictException, Injectable } from '@nestjs/common';
-
 import * as dayjs from 'dayjs';
+import * as ExcelJS from 'exceljs';
+import { Buffer } from 'buffer';
 
 import User from 'src/auth/interfaces/user.interface';
 import { ValidRoles } from 'src/auth/interfaces';
@@ -75,7 +76,12 @@ export class GradesService {
   async assignStudentToProgramLevel(
     studentId: string,
     assignStudentProgramLevel: assignStudentToProgramLevelDto,
-  ) {}
+  ) {
+    return await this.gradesRepository.assignStudentToProgramLevel({
+      student_id: studentId,
+      program_level_id: assignStudentProgramLevel.program_level_id,
+    });
+  }
 
   async getStudentPrograms(studentId: string) {
     return await this.gradesRepository.getStudentPrograms(studentId);
@@ -109,5 +115,28 @@ export class GradesService {
     }));
 
     return enhancedData;
+  }
+
+  async generateStudentGradesReport(): Promise<Buffer> {
+    const grades = await this.gradesRepository.getStudentPrograms('');
+
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('Student Grades');
+
+    worksheet.columns = [
+      { header: 'Student ID', key: 'student_id', width: 20 },
+      { header: 'Program', key: 'program_name', width: 30 },
+      { header: 'Level', key: 'level_name', width: 20 },
+    ];
+
+    grades.forEach((grade) => {
+      worksheet.addRow({
+        student_id: grade.student_id,
+        program_name: grade.programs.name,
+        level_name: grade.student_types.name,
+      });
+    });
+
+    return workbook.xlsx.writeBuffer() as Promise<Buffer>;
   }
 }

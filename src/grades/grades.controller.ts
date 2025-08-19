@@ -1,5 +1,6 @@
-import { Controller, Get, Post, Body, Param } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Res } from '@nestjs/common';
 import { ApiBearerAuth } from '@nestjs/swagger';
+import { Response } from 'express';
 
 import { Auth } from 'src/auth/decorators/auth.decorator';
 import { ValidRoles } from 'src/auth/interfaces';
@@ -55,5 +56,20 @@ export class GradesController {
     @Param('programId') programId: string,
   ) {
     return this.gradesService.getStudentProgramLevels(studentId, programId);
+  }
+
+  @Get('report')
+  async downloadStudentGradesReport(@Res() res: Response) {
+    const reportBuffer = await this.gradesService.generateStudentGradesReport();
+
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    );
+    res.setHeader(
+      'Content-Disposition',
+      'attachment; filename=student-grades-report.xlsx',
+    );
+    res.send(reportBuffer);
   }
 }

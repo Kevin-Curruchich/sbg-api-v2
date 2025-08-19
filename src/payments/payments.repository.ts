@@ -10,6 +10,7 @@ import {
 } from './dto/create-student-payment.dto';
 import { GetStudentPaymentsRepository } from './dto/get-student-payments.dto';
 import { PaymentReportsDto } from 'src/reports/dto/payments-reports.dto';
+import { GetStudentsPaymentsReportsDto } from './dto/get-student-payments-reports.dto';
 
 @Injectable()
 export class PaymentsRepository {
@@ -124,7 +125,7 @@ export class PaymentsRepository {
           const differenceAmounts =
             data.amount - totalAmountNotFromCreditBalance;
 
-          if (differenceAmounts > 0) {
+          if (totalAmountNotFromCreditBalance && differenceAmounts > 0) {
             // Crear transacción solo por la diferencia
             await prisma.student_balance_transactions.create({
               data: {
@@ -188,7 +189,17 @@ export class PaymentsRepository {
 
     // ✅ USAR TRANSACCIONES PARA ATOMICIDAD
     await this.prismaService.$transaction(async (prisma) => {
-      // 1. Crear pagos para cada estudiante
+      // 1. Crear una donacion
+      const donation = await prisma.donations.create({
+        data: {
+          amount: createStudentPaymentsDto.amount,
+          description: createStudentPaymentsDto.payment_description,
+          payment_method_id: createStudentPaymentsDto.payment_method_id,
+          reference_number: createStudentPaymentsDto.reference_number,
+        },
+      });
+
+      // 2. Crear pagos para cada estudiante
       await Promise.all(
         createStudentPaymentsDto.student_ids.map((studentId) =>
           prisma.payments.create({
@@ -197,13 +208,14 @@ export class PaymentsRepository {
               amount: amountPerStudent,
               payment_date: createStudentPaymentsDto.payment_date,
               payment_method_id: createStudentPaymentsDto.payment_method_id,
-              reference_number: createStudentPaymentsDto.reference_number,
+              reference_number: `${createStudentPaymentsDto.reference_number} - donation=${donation.donation_id}`,
+              donation_id: donation.donation_id,
             },
           }),
         ),
       );
 
-      // 2. ✅ CREAR TRANSACCIONES DE BALANCE PARA CADA ESTUDIANTE
+      // 3. ✅ CREAR TRANSACCIONES DE BALANCE PARA CADA ESTUDIANTE
       await Promise.all(
         createStudentPaymentsDto.student_ids.map((studentId) => {
           const currentBalance = balanceMap.get(studentId) || 0;
@@ -213,7 +225,7 @@ export class PaymentsRepository {
               amount: -amountPerStudent, // ✅ NEGATIVO porque es CREDIT
               reference_id: createStudentPaymentsDto.payment_method_id,
               transaction_type: 'CREDIT',
-              description: `BULK-${Date.now()}-${studentId.slice(-4)}`,
+              description: `DONATION-${Date.now()}-${studentId.slice(-4)}`,
               previous_balance: currentBalance,
               new_balance: currentBalance - amountPerStudent,
             },
@@ -405,6 +417,13 @@ export class PaymentsRepository {
                     charge_type_id: true,
                   },
                 },
+                charge_statuses: {
+                  select: {
+                    name: true,
+                    charge_status_id: true,
+                  },
+                },
+                due_date: true,
               },
             },
           },
@@ -526,22 +545,6 @@ export class PaymentsRepository {
             },
           });
 
-          // 3. ✅ RESTAURAR MONTOS DE LOS CARGOS
-          if (deletedPayment.payment_details?.length > 0) {
-            await Promise.all(
-              deletedPayment.payment_details.map((detail) =>
-                prisma.charges.update({
-                  where: { charge_id: detail.charges.charge_id },
-                  data: {
-                    current_amount: {
-                      increment: detail.applied_amount,
-                    },
-                  },
-                }),
-              ),
-            );
-          }
-
           return deletedPayment;
         },
       );
@@ -606,5 +609,89 @@ export class PaymentsRepository {
     return {
       studentTransactionBalance: balance,
     };
+  }
+
+  async getPaymentsReport(filters: GetStudentsPaymentsReportsDto) {
+    const where: Prisma.paymentsWhereInput = {
+      ...(filters.start_date &&
+        filters.end_date && {
+          payment_date: {
+            gte: new Date(filters.start_date),
+            lte: new Date(filters.end_date),
+          },
+        }),
+      students: {
+        AND: [
+          ...(filters?.searchQuery
+            ? [
+                {
+                  first_name: {
+                    contains: filters.searchQuery,
+                    mode: 'insensitive' as Prisma.QueryMode,
+                  },
+                },
+              ]
+            : []),
+          ...(filters?.searchQuery
+            ? [
+                {
+                  last_name: {
+                    contains: filters.searchQuery,
+                    mode: 'insensitive' as Prisma.QueryMode,
+                  },
+                },
+              ]
+            : []),
+          ...(filters?.program_id
+            ? [
+                {
+                  student_grades: {
+                    some: {
+                      program_levels: {
+                        program_id: filters.program_id,
+                      },
+                    },
+                  },
+                },
+              ]
+            : []),
+        ],
+      },
+    };
+
+    return this.prismaService.payments.findMany({
+      where,
+      include: {
+        students: {
+          select: {
+            first_name: true,
+            last_name: true,
+          },
+        },
+        payment_details: {
+          select: {
+            applied_amount: true,
+            description: true,
+            charges: {
+              select: {
+                charge_id: true,
+                current_amount: true,
+                charge_types: {
+                  select: {
+                    name: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+        payment_methods: {
+          select: {
+            name: true,
+            payment_method_id: true,
+          },
+        },
+      },
+    });
   }
 }

@@ -7,6 +7,7 @@ import {
   assignStudentToProgramLevelRepositoryDto,
   AssignStudentToProgramRepositoryDto,
 } from './dto/assign-student-to-grade.dto';
+import { GradeLevelStatuses } from 'src/common/constants/grade-levels.constant';
 
 @Injectable()
 export class GradesRepository {
@@ -49,7 +50,7 @@ export class GradesRepository {
         data: {
           student_id: assignationData.student_id,
           program_level_id: assignationData.program_level_id,
-          student_grade_status_id: student_grade_status_enum.regular,
+          student_grade_status_id: GradeLevelStatuses.REGULAR,
         },
       });
     } catch (error) {
@@ -143,6 +144,9 @@ export class GradesRepository {
               name: true,
             },
           },
+        },
+        orderBy: {
+          start_date: 'desc',
         },
       });
     } catch (error) {

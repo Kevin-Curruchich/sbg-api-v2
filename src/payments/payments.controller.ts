@@ -6,9 +6,11 @@ import {
   Param,
   Delete,
   Query,
+  Res,
 } from '@nestjs/common';
 import { ApiBearerAuth } from '@nestjs/swagger';
 import { Auth } from 'src/auth/decorators/auth.decorator';
+import { Response } from 'express';
 
 import User from 'src/auth/interfaces/user.interface';
 import { GetUser } from 'src/auth/decorators/get-user.decorator';
@@ -22,6 +24,7 @@ import {
 } from './dto/create-student-payment.dto';
 import { GetStudentPaymentsDto } from './dto/get-student-payments.dto';
 import { GetPaymentQueryDto } from './dto/get-payment-query.dto';
+import { GetStudentsPaymentsReportsDto } from './dto/get-student-payments-reports.dto';
 
 @Controller('payments')
 @Auth(ValidRoles.admin, ValidRoles.superuser)
@@ -41,7 +44,7 @@ export class PaymentsController {
     return this.paymentsService.createAutomatizedPayment(createPaymentDto);
   }
 
-  @Post('automatized-balance')
+  @Post('spread-student-positive-balance/:studentId')
   spreadStudentPositiveBalanceToCharges(@Param('studentId') studentId: string) {
     return this.paymentsService.spreadStudentPositiveBalanceToCharges(
       studentId,
@@ -63,6 +66,25 @@ export class PaymentsController {
     return this.paymentsService.getAllPayments(queryParams, user);
   }
 
+  @Get('report')
+  async downloadPaymentsReport(
+    @Res() res: Response,
+    @Query('program_id') paymentReportsDto: GetStudentsPaymentsReportsDto,
+  ) {
+    const excelBuffer =
+      await this.paymentsService.generatePaymentsExcelReport(paymentReportsDto);
+
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    );
+    res.setHeader(
+      'Content-Disposition',
+      'attachment; filename=payments_report.xlsx',
+    );
+    res.send(excelBuffer);
+  }
+
   @Get(':paymentId')
   findOne(
     @Param('paymentId') paymentId: string,
@@ -71,8 +93,8 @@ export class PaymentsController {
     return this.paymentsService.getPaymentById(paymentId, queryParams);
   }
 
-  @Delete(':id')
-  removePayment(@Param('id') id: string) {
-    return this.paymentsService.removePaymentById(id);
+  @Delete(':paymentId')
+  removePayment(@Param('paymentId') paymentId: string) {
+    return this.paymentsService.removePaymentById(paymentId);
   }
 }

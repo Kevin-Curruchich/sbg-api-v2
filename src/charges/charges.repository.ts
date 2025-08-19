@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { Prisma, frequency_enum } from '@prisma/client';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { StudentChargeRepositoryDto } from './dto/student-charges-query.dto';
 import {
@@ -14,10 +14,65 @@ import {
   CreateForStudentsChargeDto,
 } from './dto/create-charge-for-student.dto';
 import { StudentBalanceTransaction } from 'src/common/enums/student-balance-transaction.enum';
+import { GetChargesTypes } from './dto/get-charges-types';
+import { CreateChargeDto } from './dto/create-charge.dto';
 
 @Injectable()
 export class ChargesRepository {
   constructor(private readonly prismaService: PrismaService) {}
+
+  async createChargeType(data: CreateChargeDto) {
+    return await this.prismaService.charge_types.create({
+      data: {
+        name: data.name,
+        description: data.description,
+        default_amount: data.default_amount,
+        frequency: data.frequency,
+        is_recurring: data.is_recurring,
+        program_id: data.program_id,
+      },
+    });
+  }
+
+  async getChargeTypes(query: GetChargesTypes) {
+    const response = await PrismaCRUD.getDataWithOffsetPagination<
+      typeof this.prismaService.charge_types
+    >(
+      this.prismaService.charge_types,
+      {
+        where: {
+          name: {
+            contains: query.search_query,
+            mode: 'insensitive',
+          },
+        },
+        orderBy: {
+          created_at: 'desc',
+        },
+        include: {
+          programs: {
+            select: {
+              program_id: true,
+              name: true,
+            },
+          },
+        },
+      },
+      {
+        page: query.page,
+        take: query.take,
+      },
+    );
+
+    return {
+      data: response.data,
+      total: response.total,
+    };
+  }
+
+  async getChargeFrequency() {
+    return Object.values(frequency_enum);
+  }
 
   async getAllCharges(query: GetChargesCreatedRepository, programs: string[]) {
     const { search_query, charge_status_id, charge_type_id, due_date } = query;
@@ -679,6 +734,105 @@ export class ChargesRepository {
         `Failed to calculate payment collection rate: ${error.message}`,
       );
     }
+  }
+
+  async getDetailedChargesReport(filters: {
+    programId?: string;
+    studentTypeId?: string;
+  }) {
+    const { programId, studentTypeId } = filters;
+
+    const whereClause: Prisma.chargesWhereInput = {
+      students: {
+        student_grades: {
+          some: {
+            program_levels: {
+              program_id: programId || undefined,
+            },
+          },
+        },
+        student_type_id: studentTypeId || undefined,
+      },
+    };
+
+    return await this.prismaService.charges.findMany({
+      where: whereClause,
+      include: {
+        students: {
+          select: {
+            first_name: true,
+            last_name: true,
+            student_id: true,
+            student_grades: {
+              select: {
+                program_levels: {
+                  select: {
+                    programs: {
+                      select: {
+                        name: true,
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        charge_types: {
+          select: {
+            name: true,
+          },
+        },
+        charge_statuses: {
+          select: {
+            name: true,
+          },
+        },
+        payment_details: {
+          select: {
+            applied_amount: true,
+            payments: {
+              select: {
+                payment_date: true,
+                payment_id: true,
+              },
+            },
+          },
+        },
+      },
+    });
+  }
+
+  async getStudentChargesWithDetails(studentId: string) {
+    return await this.prismaService.charges.findMany({
+      where: {
+        student_id: studentId,
+      },
+      include: {
+        charge_types: {
+          select: {
+            name: true,
+            description: true,
+          },
+        },
+        charge_statuses: {
+          select: {
+            name: true,
+          },
+        },
+        payment_details: {
+          select: {
+            applied_amount: true,
+            payments: {
+              select: {
+                payment_date: true,
+                payment_id: true,
+              },
+            },
+          },
+        },
+      },
+    });
   }
 
   private async handleError(error: Prisma.PrismaClientKnownRequestError) {

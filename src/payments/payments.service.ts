@@ -1,12 +1,12 @@
 import { Injectable } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
+// import { ConfigService } from '@nestjs/config';
 
 import * as dayjs from 'dayjs';
 
 import User from 'src/auth/interfaces/user.interface';
 
-import SendGridService from '../common/sendgrid.service';
-import { StudentService } from 'src/students/students.service';
+// import SendGridService from '../common/sendgrid.service';
+// import { StudentService } from 'src/students/students.service';
 import { ChargesService } from '../charges/charges.service';
 
 import { PaymentsRepository } from './payments.repository';
@@ -23,14 +23,16 @@ import { GetPaymentQueryDto } from './dto/get-payment-query.dto';
 
 import { formatCurrency } from 'src/common/helpers/currency.helper';
 import { PaymentReportsDto } from 'src/reports/dto/payments-reports.dto';
+import { formatDate } from 'src/common/helpers/date.helper';
+import { GetStudentsPaymentsReportsDto } from './dto/get-student-payments-reports.dto';
 
 @Injectable()
 export class PaymentsService {
   constructor(
     private readonly paymentsRepository: PaymentsRepository,
-    private readonly sendGridService: SendGridService,
-    private readonly studentsService: StudentService,
-    private readonly configService: ConfigService,
+    // private readonly sendGridService: SendGridService,
+    // private readonly studentsService: StudentService,
+    // private readonly configService: ConfigService,
     private readonly chargesService: ChargesService,
   ) {}
 
@@ -68,27 +70,27 @@ export class PaymentsService {
     });
 
     //send email to student
-    const student = await this.studentsService.getStudentById(
-      createPaymentDto.student_id,
-    );
+    // const student = await this.studentsService.getStudentById(
+    //   createPaymentDto.student_id,
+    // );
 
-    const paymentData = {
-      paymentDate: dayjs(paymentCreated.payment_date).format('DD/MM/YYYY'),
-      paymentId: paymentCreated.public_payment_id,
-      studentFullName: `${student.first_name} ${student.last_name}`,
-      paymentAmount: paymentCreated.amount,
-      paymentDetails: paymentCreated.payment_details.map((detail) => ({
-        collectionName: detail.charges.charge_types.name,
-        paymentDescription: detail.description,
-        paymentAmount: detail.applied_amount,
-      })),
-    };
+    // const paymentData = {
+    //   paymentDate: dayjs(paymentCreated.payment_date).format('DD/MM/YYYY'),
+    //   paymentId: paymentCreated.public_payment_id,
+    //   studentFullName: `${student.first_name} ${student.last_name}`,
+    //   paymentAmount: paymentCreated.amount,
+    //   paymentDetails: paymentCreated.payment_details.map((detail) => ({
+    //     collectionName: detail.charges.charge_types.name,
+    //     paymentDescription: detail.description,
+    //     paymentAmount: detail.applied_amount,
+    //   })),
+    // };
 
-    await this.sendGridService.sendEmail(
-      student.email,
-      this.configService.get<string>('PAYMENT_TEMPLATE_ID'),
-      paymentData,
-    );
+    // await this.sendGridService.sendEmail(
+    //   student.email,
+    //   this.configService.get<string>('PAYMENT_TEMPLATE_ID'),
+    //   paymentData,
+    // );
 
     return paymentCreated;
   }
@@ -120,7 +122,7 @@ export class PaymentsService {
     for (const charge of studentCharges) {
       if (amountToApplyToCharges <= 0) break;
 
-      const chargeAmount = Number(charge.current_amount);
+      const chargeAmount = Number(charge.totalAmountDue);
       const amountToApply = Math.min(amountToApplyToCharges, chargeAmount);
 
       paymentDetails.push({
@@ -169,7 +171,7 @@ export class PaymentsService {
     for (const charge of studentCharges) {
       if (remainingBalance <= 0) break;
 
-      const chargeAmount = Number(charge.current_amount);
+      const chargeAmount = Number(charge.totalAmountDue);
       const amountToApply = Math.min(remainingBalance, chargeAmount);
 
       paymentDetails.push({
@@ -182,9 +184,25 @@ export class PaymentsService {
       remainingBalance -= amountToApply;
     }
 
+    const paymentAmountApplied = paymentDetails.reduce(
+      (total, detail) => total + detail.applied_amount,
+      0,
+    );
+
+    const paymentCreated = await this.createStudentPayment({
+      student_id: studentId,
+      amount: paymentAmountApplied,
+      payment_method_id: 'e9540021-dc7e-45bd-b8da-65c7d62b786f',
+      reference_number: null,
+      payment_date: new Date(),
+      payment_details: paymentDetails,
+    });
+
     return {
       message: 'Positive balance spread to charges successfully',
       remainingBalance,
+      paymentDetails,
+      paymentCreated,
     };
   }
 
@@ -254,11 +272,17 @@ export class PaymentsService {
 
     const dataFormatted = data.map((payment) => ({
       ...payment,
+      amountFormatted: formatCurrency(Number(payment.amount)),
       payment_date: dayjs(payment.payment_date).format('DD/MM/YYYY'),
       payment_details: Array.isArray(payment.payment_details)
         ? payment.payment_details.map((detail) => ({
             ...detail,
             applied_amount: formatCurrency(Number(detail.applied_amount)),
+            due_date_formatted: formatDate(
+              detail.charges.due_date,
+              'DD/MM/YYYY',
+            ),
+            due_date: formatDate(detail.charges.due_date, 'YYYY-MM-DD'),
           }))
         : [],
     }));
@@ -293,7 +317,7 @@ export class PaymentsService {
         0,
       );
 
-      let newStatus;
+      let newStatus = ChargeStatuses.TOTAL_PAID;
 
       if (totalAmountPaidByCharge === 0) {
         newStatus = ChargeStatuses.PENDING;
@@ -307,37 +331,11 @@ export class PaymentsService {
       });
     });
 
-    const paymentData = {
-      paymentDate: dayjs(payment.payment_date).format('DD/MM/YYYY'),
-      paymentId: payment.payment_id,
-      studentFullName: `${payment.students.first_name} ${payment.students.last_name}`,
-      paymentAmount: payment.amount,
-      paymentDetails: payment.payment_details.map((detail) => ({
-        collectionName: detail.charges.charge_types.name,
-        paymentDescription: detail.description,
-        paymentAmount: Number(detail.applied_amount),
-      })),
-    };
-
-    const totalStudentChargesAmountApplied = studentCharges.reduce(
-      (acc, charge) => acc + charge.payment_applied_amount,
-      0,
-    );
-
-    if (totalStudentChargesAmountApplied < Number(payment.amount)) {
-      paymentData.paymentDetails.push({
-        collectionName: 'Saldo a Favor',
-        paymentDescription: 'Eliminacion de saldo a favor',
-        paymentAmount:
-          Number(payment.amount) - totalStudentChargesAmountApplied,
-      });
-    }
-
-    await this.sendGridService.sendEmail(
-      payment.students.email,
-      this.configService.get<string>('DELETE_PAYMENT_TEMPLATE_ID'),
-      paymentData,
-    );
+    // await this.sendGridService.sendEmail(
+    //   payment.students.email,
+    //   this.configService.get<string>('DELETE_PAYMENT_TEMPLATE_ID'),
+    //   paymentData,
+    // );
 
     return this.paymentsRepository.removePaymentById(paymentId);
   }
@@ -353,5 +351,60 @@ export class PaymentsService {
       paymentsDates,
       programs,
     );
+  }
+
+  async getPaymentsReport(filters: GetStudentsPaymentsReportsDto) {
+    const payments = await this.paymentsRepository.getPaymentsReport(filters);
+
+    return payments.map((payment) => ({
+      ...payment,
+      payment_date: dayjs(payment.payment_date).format('YYYY-MM-DD'),
+      payment_details: payment.payment_details.map((detail) => ({
+        ...detail,
+        applied_amount: Number(detail.applied_amount).toFixed(2),
+      })),
+    }));
+  }
+
+  async generatePaymentsExcelReport(
+    filters: GetStudentsPaymentsReportsDto,
+  ): Promise<Buffer> {
+    const payments = await this.getPaymentsReport(filters);
+
+    const ExcelJS = require('exceljs');
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('Payments Report');
+
+    worksheet.columns = [
+      { header: 'StudentID', key: 'studentId', width: 0 },
+      { header: 'Id', key: 'id', width: 30 },
+      { header: 'Estudiante', key: 'studentName', width: 30 },
+      { header: 'Fecha de Pago', key: 'paymentDate', width: 15 },
+      { header: 'Monto', key: 'amount', width: 15 },
+      { header: 'Detalles', key: 'details', width: 50 },
+      { header: 'Metodo de pago', key: 'payment_method', width: 50 },
+      { header: 'Donacion', key: 'donation', width: 50 },
+    ];
+
+    payments.forEach((payment) => {
+      const baseRow = {
+        studentId: payment.student_id,
+        id: payment.public_payment_id,
+        studentName: `${payment.students.first_name} ${payment.students.last_name}`,
+        paymentDate: formatDate(payment.payment_date, 'DD/MM/YYYY'),
+        amount: Number(payment.amount),
+        payment_method: payment.payment_methods.name,
+        details:
+          payment.payment_details.length > 0
+            ? `${payment.payment_details[0]?.description || 'N/A'} (${payment.payment_details[0]?.applied_amount})`
+            : '-',
+        donation: payment.donation_id ? 'Si' : 'No',
+      };
+
+      worksheet.addRow(baseRow);
+    });
+
+    const buffer = await workbook.xlsx.writeBuffer();
+    return buffer;
   }
 }

@@ -232,8 +232,13 @@ export class StudentsRepository {
     getStudentsQuery: GetStudentsPaginationQueryDto,
     programs: string[] | null,
   ) {
-    const { program_id, program_level_id, student_status_id, student_type_id } =
-      getStudentsQuery;
+    const {
+      program_id,
+      program_level_id,
+      student_status_id,
+      student_type_id,
+      searchTerm,
+    } = getStudentsQuery;
 
     const whereClause: Prisma.studentsWhereInput = {
       student_status_id: student_status_id || undefined,
@@ -273,6 +278,23 @@ export class StudentsRepository {
               },
             },
           },
+        },
+      ];
+    }
+
+    if (searchTerm) {
+      whereClause.AND = [
+        ...(Array.isArray(whereClause.AND)
+          ? whereClause.AND
+          : whereClause.AND
+            ? [whereClause.AND]
+            : []),
+        {
+          OR: [
+            { first_name: { contains: searchTerm, mode: 'insensitive' } },
+            { last_name: { contains: searchTerm, mode: 'insensitive' } },
+            { email: { contains: searchTerm, mode: 'insensitive' } },
+          ],
         },
       ];
     }
@@ -328,7 +350,8 @@ export class StudentsRepository {
     studentsQuery: GetStudentsQueryDto,
     programs: string[],
   ) {
-    const { student_status_id = StudentStatusConstant.ACTIVE } = studentsQuery;
+    const { student_status_id = StudentStatusConstant.ACTIVE, searchTerm } =
+      studentsQuery;
 
     const whereClause: Prisma.studentsWhereInput = {
       student_status_id,
@@ -359,7 +382,7 @@ export class StudentsRepository {
     }
 
     // If no program_id or program_level_id is provided, we filter by default all students because is a super user or academic
-    if (!studentsQuery.program_id && !studentsQuery.program_level_id) {
+    if (!studentsQuery?.program_id && !studentsQuery?.program_level_id) {
       if (programs.length > 0) {
         whereClause.student_programs = {
           some: {
@@ -372,6 +395,23 @@ export class StudentsRepository {
         delete whereClause.student_programs;
         delete whereClause.student_grades;
       }
+    }
+
+    if (searchTerm) {
+      whereClause.AND = [
+        ...(Array.isArray(whereClause.AND)
+          ? whereClause.AND
+          : whereClause.AND
+            ? [whereClause.AND]
+            : []),
+        {
+          OR: [
+            { first_name: { contains: searchTerm, mode: 'insensitive' } },
+            { last_name: { contains: searchTerm, mode: 'insensitive' } },
+            { email: { contains: searchTerm, mode: 'insensitive' } },
+          ],
+        },
+      ];
     }
 
     return await this.prismaService.students.findMany({
@@ -405,6 +445,24 @@ export class StudentsRepository {
               },
             },
           },
+        },
+        student_grades: {
+          select: {
+            program_levels: {
+              include: {
+                programs: {
+                  select: {
+                    program_id: true,
+                    name: true,
+                  },
+                },
+              },
+            },
+          },
+          orderBy: {
+            created_at: 'desc',
+          },
+          take: 1, // Get only the last grade
         },
       },
     });

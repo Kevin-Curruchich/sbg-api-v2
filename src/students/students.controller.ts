@@ -1,6 +1,16 @@
-import { Controller, Get, Post, Body, Param, Query, Put } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Param,
+  Query,
+  Put,
+  Res,
+} from '@nestjs/common';
 import { ApiBearerAuth } from '@nestjs/swagger';
 import { StudentService } from './students.service';
+import { Response } from 'express';
 
 import { Auth } from 'src/auth/decorators/auth.decorator';
 import { Public } from 'src/auth/decorators/public.decorator';
@@ -70,6 +80,29 @@ export class StudentController {
   @Public() // Remove role restrictions to make it public
   getStudentByIdentifier(@Query('term') term: string) {
     return this.studentService.getStudentByIdentifier(term);
+  }
+
+  @Get('report')
+  async downloadStudentReport(
+    @Query()
+    queryFilters: GetStudentsQueryDto,
+    @GetUser() user: User,
+    @Res() res: Response,
+  ) {
+    const reportBuffer = await this.studentService.generateStudentReport(
+      queryFilters,
+      user,
+    );
+
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    );
+    res.setHeader(
+      'Content-Disposition',
+      'attachment; filename=students-report.xlsx',
+    );
+    res.send(reportBuffer);
   }
 
   @Get(':id')

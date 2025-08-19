@@ -23,6 +23,11 @@ import {
   GetChargesAppliedToStudentsByFiltersDto,
   GetChargesCreated,
 } from './dto/get-charges-created.dto';
+import { GetChargesTypes } from './dto/get-charges-types';
+import { FrequencyLabels } from './constants/frequency.constant';
+import ExcelJS from 'exceljs';
+import { Buffer } from 'buffer';
+import { formatDate } from 'src/common/helpers/date.helper';
 
 @Injectable()
 export class ChargesService {
@@ -31,8 +36,34 @@ export class ChargesService {
     private readonly studentsService: StudentService,
   ) {}
 
-  create(createChargeDto: CreateChargeDto) {
-    return 'This action adds a new charge';
+  createChargeType(createChargeDto: CreateChargeDto) {
+    return this.chargesRepository.createChargeType(createChargeDto);
+  }
+
+  async getChargeTypes(query: GetChargesTypes) {
+    const { data, total } = await this.chargesRepository.getChargeTypes(query);
+
+    const responseEnhanced = data.map((type) => ({
+      ...type,
+      frequency: {
+        frequency_id: type.frequency,
+        name: FrequencyLabels[type.frequency],
+      },
+    }));
+
+    return {
+      data: responseEnhanced,
+      total,
+    };
+  }
+
+  async getChargeFrequency() {
+    const frequencies = await this.chargesRepository.getChargeFrequency();
+
+    return frequencies.map((frequency) => ({
+      frequency_id: frequency,
+      name: FrequencyLabels[frequency],
+    }));
   }
 
   createChargeForStudent(createChargeDto: CreateForStudentChargeDto) {
@@ -275,6 +306,103 @@ export class ChargesService {
       totalPaid: formatCurrency(result.totalPaid),
       collectionRate: result.collectionRate.toFixed(2) + '%',
     };
+  }
+
+  async generateStudentChargesReport(filters: {
+    programId?: string;
+    studentTypeId?: string;
+  }): Promise<Buffer> {
+    const charges =
+      await this.chargesRepository.getDetailedChargesReport(filters);
+
+    const ExcelJS = require('exceljs');
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('Student Charges');
+
+    worksheet.columns = [
+      { header: 'StudentID', key: 'student_id', width: 0 },
+      { header: 'Nombre del Estudiante', key: 'student_name', width: 30 },
+      { header: 'Programa', key: 'program', width: 30 },
+      { header: 'Tipo de Cobro', key: 'charge_type', width: 20 },
+      { header: 'Monto', key: 'amount', width: 15 },
+      { header: 'Monto Pagado', key: 'payed_amount', width: 15 },
+      { header: 'Saldo', key: 'amount_due', width: 15 },
+      { header: 'Estado', key: 'status', width: 15 },
+      { header: 'Fecha de Vencimiento', key: 'due_date', width: 20 },
+    ];
+
+    charges.forEach((charge) => {
+      const payedAmount = charge.payment_details.reduce(
+        (sum, detail) => sum + Number(detail.applied_amount),
+        0,
+      );
+
+      const amountDue = Number(charge.current_amount) - payedAmount;
+
+      worksheet.addRow({
+        student_id: charge.students.student_id,
+        student_name: `${charge.students.first_name} ${charge.students.last_name}`,
+        program:
+          charge.students.student_grades[0]?.program_levels.programs.name ||
+          'N/A',
+        charge_type: charge.charge_types.name,
+        amount: Number(charge.current_amount),
+        payed_amount: payedAmount,
+        amount_due: Number(amountDue),
+        status: charge.charge_statuses.name,
+        due_date: formatDate(charge.due_date, 'DD/MM/YYYY') || 'N/A',
+      });
+    });
+
+    const buffer = await workbook.xlsx.writeBuffer();
+
+    return buffer;
+  }
+
+  async generateStudentSpecificChargesReport(
+    studentId: string,
+  ): Promise<Buffer> {
+    const charges =
+      await this.chargesRepository.getStudentChargesWithDetails(studentId);
+
+    const ExcelJS = require('exceljs');
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('Student Charges');
+
+    worksheet.columns = [
+      { header: 'charge_id', key: 'charge_id', width: 0 },
+      { header: 'Cobro', key: 'charge_type', width: 20 },
+      { header: 'Descripción', key: 'description', width: 30 },
+      { header: 'Monto Original', key: 'original_amount', width: 15 },
+      { header: 'Monto Actual', key: 'current_amount', width: 15 },
+      { header: 'Total Pagado', key: 'total_paid', width: 15 },
+      { header: 'Monto Pendiente', key: 'outstanding_amount', width: 15 },
+      { header: 'Estado', key: 'status', width: 15 },
+      { header: 'Fecha de Vencimiento', key: 'due_date', width: 20 },
+    ];
+
+    charges.forEach((charge) => {
+      const totalPaid = charge.payment_details.reduce(
+        (sum, detail) => sum + Number(detail.applied_amount),
+        0,
+      );
+
+      const outstandingAmount = Number(charge.current_amount) - totalPaid;
+
+      worksheet.addRow({
+        charge_id: charge.charge_id,
+        charge_type: charge.charge_types.name,
+        description: charge.description || 'N/A',
+        original_amount: Number(charge.original_amount),
+        current_amount: Number(charge.current_amount),
+        outstanding_amount: outstandingAmount,
+        total_paid: totalPaid,
+        status: charge.charge_statuses.name,
+        due_date: formatDate(charge.due_date, 'DD/MM/YYYY'),
+      });
+    });
+
+    return workbook.xlsx.writeBuffer() as Promise<Buffer>;
   }
 
   remove(id: number) {

@@ -7,8 +7,10 @@ import {
   Delete,
   Query,
   Put,
+  Res,
 } from '@nestjs/common';
 import { ApiBearerAuth } from '@nestjs/swagger';
+import { Response } from 'express';
 
 import { Public } from 'src/auth/decorators/public.decorator';
 
@@ -29,6 +31,8 @@ import {
   GetChargesCreated,
 } from './dto/get-charges-created.dto';
 import { UpdateStudentChargeDto } from './dto/update-student-charge.dto';
+import { GetChargesTypes } from './dto/get-charges-types';
+import { ChargesReportFiltersDto } from './dto/charges-report-filters.dto';
 
 @Controller('charges')
 @Auth(ValidRoles.admin, ValidRoles.superuser)
@@ -38,7 +42,7 @@ export class ChargesController {
 
   @Post()
   create(@Body() createChargeDto: CreateChargeDto) {
-    return this.chargesService.create(createChargeDto);
+    return this.chargesService.createChargeType(createChargeDto);
   }
 
   @Post('student')
@@ -77,6 +81,16 @@ export class ChargesController {
     return this.chargesService.getAllCharges(query, user);
   }
 
+  @Get('types')
+  getChargeTypes(@Query() query: GetChargesTypes) {
+    return this.chargesService.getChargeTypes(query);
+  }
+
+  @Get('frequency')
+  getChargeFrequency() {
+    return this.chargesService.getChargeFrequency();
+  }
+
   @Get('list')
   getChargesApplyToStudentsByFilters(
     @Query() programId: GetChargesAppliedToStudentsByFiltersDto,
@@ -100,5 +114,43 @@ export class ChargesController {
   @Delete(':id')
   remove(@Param('id') id: string) {
     return this.chargesService.remove(+id);
+  }
+
+  @Get('report')
+  async downloadStudentChargesReport(
+    @Query() filters: ChargesReportFiltersDto,
+    @Res() res: Response,
+  ) {
+    const reportBuffer =
+      await this.chargesService.generateStudentChargesReport(filters);
+
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    );
+    res.setHeader(
+      'Content-Disposition',
+      'attachment; filename=student-charges-report.xlsx',
+    );
+    res.send(reportBuffer);
+  }
+
+  @Get('student/:studentId/report')
+  async downloadStudentSpecificChargesReport(
+    @Param('studentId') studentId: string,
+    @Res() res: Response,
+  ) {
+    const reportBuffer =
+      await this.chargesService.generateStudentSpecificChargesReport(studentId);
+
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    );
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename=student-${studentId}-charges-report.xlsx`,
+    );
+    res.send(reportBuffer);
   }
 }

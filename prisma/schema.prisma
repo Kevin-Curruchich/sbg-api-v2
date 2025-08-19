@@ -117,10 +117,12 @@ model payments {
   updated_at        DateTime           @default(now()) @db.Timestamp(6)
   payment_method_id String             @db.Uuid
   public_payment_id String?            @db.VarChar(50)
+  donation_id       String?            @db.Uuid
   payment_details   payment_details[]
   payment_evidence  payment_evidence[]
   payment_methods   payment_methods    @relation(fields: [payment_method_id], references: [payment_method_id], onDelete: SetNull, onUpdate: NoAction, map: "fk_payments_payment_method")
   students          students           @relation(fields: [student_id], references: [student_id], onUpdate: NoAction, map: "fk_payments_students")
+  donations         donations?         @relation(fields: [donation_id], references: [donation_id], onDelete: NoAction, onUpdate: NoAction, map: "payments_donations_fk")
 }
 
 model student_balance {
@@ -143,6 +145,8 @@ model student_grades {
   student_grade_statuses  student_grade_statuses @relation(fields: [student_grade_status_id], references: [student_grade_status_id], onUpdate: NoAction, map: "fk_student_grade_status")
   program_levels          program_levels         @relation(fields: [program_level_id], references: [program_level_id], onUpdate: NoAction, map: "fk_student_grades_program_level")
   students                students               @relation(fields: [student_id], references: [student_id], onDelete: Cascade, onUpdate: NoAction, map: "fk_student_grades_student")
+
+  @@unique([student_id, program_level_id], map: "student_grades_unique")
 }
 
 model student_statuses {
@@ -252,12 +256,13 @@ model programs {
 }
 
 model payment_methods {
-  payment_method_id String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  name              String     @db.VarChar(50)
+  payment_method_id String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name              String      @db.VarChar(50)
   description       String?
-  is_active         Boolean    @default(true)
-  created_at        DateTime   @default(now()) @db.Timestamp(6)
-  updated_at        DateTime   @default(now()) @db.Timestamp(6)
+  is_active         Boolean     @default(true)
+  created_at        DateTime    @default(now()) @db.Timestamp(6)
+  updated_at        DateTime    @default(now()) @db.Timestamp(6)
+  donations         donations[]
   payments          payments[]
 }
 
@@ -351,6 +356,18 @@ model student_programs {
   @@id([student_id, program_id, student_type_id], map: "student_programs_pk")
   @@unique([student_id, program_id, student_type_id], map: "student_programs_student_id_idx")
   @@unique([student_id, program_id, student_type_id], map: "student_programs_unique")
+}
+
+model donations {
+  donation_id       String          @id(map: "donations_pk") @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  amount            Decimal         @db.Decimal
+  created_at        DateTime        @default(now()) @db.Timestamp(6)
+  description       String?         @db.VarChar
+  reference_number  String?         @db.VarChar
+  donation_date     DateTime        @default(now()) @db.Timestamp(6)
+  payment_method_id String          @db.Uuid
+  payment_methods   payment_methods @relation(fields: [payment_method_id], references: [payment_method_id], onDelete: NoAction, onUpdate: NoAction, map: "donations_payment_methods_fk")
+  payments          payments[]
 }
 
 enum frequency_enum {
