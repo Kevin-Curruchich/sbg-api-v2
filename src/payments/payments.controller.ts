@@ -21,6 +21,7 @@ import {
   CreateStudentAutomatizedPaymentDto,
   CreateStudentPaymentDto,
   CreateStudentsPaymentDto,
+  CreateStudentPaymentDevolutionDto,
 } from './dto/create-student-payment.dto';
 import { GetStudentPaymentsDto } from './dto/get-student-payments.dto';
 import { GetPaymentQueryDto } from './dto/get-payment-query.dto';
@@ -49,6 +50,13 @@ export class PaymentsController {
     return this.paymentsService.spreadStudentPositiveBalanceToCharges(
       studentId,
     );
+  }
+
+  @Post('devolution')
+  createPaymentDevolution(
+    @Body() createPaymentDto: CreateStudentPaymentDevolutionDto,
+  ) {
+    return this.paymentsService.createPaymentDevolution(createPaymentDto);
   }
 
   @Post('students')

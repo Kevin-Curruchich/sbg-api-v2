@@ -7,6 +7,7 @@ import { PrismaService } from 'src/prisma/prisma.service';
 import {
   CreateStudentPaymentDto,
   CreateStudentsPaymentDto,
+  CreateStudentPaymentDevolutionDto,
 } from './dto/create-student-payment.dto';
 import { GetStudentPaymentsRepository } from './dto/get-student-payments.dto';
 import { PaymentReportsDto } from 'src/reports/dto/payments-reports.dto';
@@ -239,6 +240,29 @@ export class PaymentsRepository {
       amountPerStudent,
       studentsAffected: createStudentPaymentsDto.student_ids.length,
     };
+  }
+
+  async createPaymentDevolution(
+    studentPaymentDevolution: CreateStudentPaymentDevolutionDto,
+  ) {
+    const studentBalance = await this.getStudentTransactionsBalance(
+      studentPaymentDevolution.student_id,
+    );
+
+    return await this.prismaService.student_balance_transactions.create({
+      data: {
+        student_id: studentPaymentDevolution.student_id,
+        transaction_type: 'DEBIT',
+        amount: -studentPaymentDevolution.amount,
+        previous_balance: studentBalance
+          ? studentBalance.studentTransactionBalance
+          : 0,
+        new_balance:
+          (studentBalance ? studentBalance.studentTransactionBalance : 0) -
+          studentPaymentDevolution.amount,
+        description: `PAYMENT_DEVOLUTION-${dayjs().format('YYYY-MM-DD HH:mm:ss')}-${studentPaymentDevolution.reason}`,
+      },
+    });
   }
 
   async getPaymentsByChargeId(studentChargeId: string) {

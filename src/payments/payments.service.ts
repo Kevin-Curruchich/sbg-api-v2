@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, BadRequestException } from '@nestjs/common';
 // import { ConfigService } from '@nestjs/config';
 
 import * as dayjs from 'dayjs';
@@ -17,6 +17,7 @@ import {
   CreateStudentAutomatizedPaymentDto,
   CreateStudentPaymentDto,
   CreateStudentsPaymentDto,
+  CreateStudentPaymentDevolutionDto,
 } from './dto/create-student-payment.dto';
 import { GetStudentPaymentsDto } from './dto/get-student-payments.dto';
 import { GetPaymentQueryDto } from './dto/get-payment-query.dto';
@@ -101,7 +102,7 @@ export class PaymentsService {
     const { amount } = createPaymentDto;
 
     if (amount <= 0) {
-      throw new Error('Payment amount must be greater than zero');
+      throw new BadRequestException('Payment amount must be greater than zero');
     }
 
     let amountToApplyToCharges = amount;
@@ -203,6 +204,44 @@ export class PaymentsService {
       remainingBalance,
       paymentDetails,
       paymentCreated,
+    };
+  }
+
+  async createPaymentDevolution(
+    studentPaymentDevolution: CreateStudentPaymentDevolutionDto,
+  ) {
+    // The purpose of this endpoint is to handle payment reversal or refund when the student has a positive balance
+
+    const { student_id, amount, reason } = studentPaymentDevolution;
+
+    if (amount <= 0) {
+      throw new Error('Payment amount must be greater than zero');
+    }
+
+    const studentBalance =
+      await this.chargesService.getStudentBalance(student_id);
+
+    if (!studentBalance.studentHasCredit) {
+      throw new BadRequestException('No positive balance to refund');
+    }
+
+    if (amount > studentBalance.studentCredit) {
+      throw new BadRequestException(
+        'Requested devolution amount exceeds available credit balance',
+      );
+    }
+
+    // Create the payment devolution
+    const paymentDevolution =
+      await this.paymentsRepository.createPaymentDevolution({
+        student_id,
+        amount,
+        reason,
+      });
+
+    return {
+      message: 'Payment devolution created successfully',
+      paymentDevolution,
     };
   }
 

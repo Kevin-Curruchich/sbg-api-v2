@@ -85,3 +85,14 @@ export class CreateStudentAutomatizedPaymentDto {
   @IsDateString()
   payment_date: Date;
 }
+
+export class CreateStudentPaymentDevolutionDto {
+  @IsString()
+  student_id: string;
+
+  @IsNumber()
+  amount: number;
+
+  @IsString()
+  reason: string;
+}
