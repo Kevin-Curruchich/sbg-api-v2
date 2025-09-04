@@ -12,6 +12,7 @@ import {
 import { GetStudentPaymentsRepository } from './dto/get-student-payments.dto';
 import { PaymentReportsDto } from 'src/reports/dto/payments-reports.dto';
 import { GetStudentsPaymentsReportsDto } from './dto/get-student-payments-reports.dto';
+import { StudentBalanceTransaction } from 'src/common/enums/student-balance-transaction.enum';
 
 @Injectable()
 export class PaymentsRepository {
@@ -91,7 +92,7 @@ export class PaymentsRepository {
               student_id: data.student_id,
               amount: -amountToApplyOnBalance, // ✅ NEGATIVO porque es un CREDIT (reduce deuda)
               reference_id: createdPayment.payment_id,
-              transaction_type: 'CREDIT', // ✅ CREDIT porque es un pago
+              transaction_type: StudentBalanceTransaction.CREDIT, // ✅ CREDIT porque es un pago
               description: `Payment received: ${data.reference_number || 'No reference'}`,
               previous_balance: currentBalance.studentTransactionBalance,
               new_balance:
@@ -133,7 +134,7 @@ export class PaymentsRepository {
                 student_id: data.student_id,
                 amount: -differenceAmounts,
                 reference_id: createdPayment.payment_id,
-                transaction_type: 'CREDIT',
+                transaction_type: StudentBalanceTransaction.CREDIT,
                 description: `Payment difference applied: ${data.reference_number || 'No reference'}`,
                 previous_balance: currentBalance.studentTransactionBalance,
                 new_balance:
@@ -225,7 +226,7 @@ export class PaymentsRepository {
               student_id: studentId,
               amount: -amountPerStudent, // ✅ NEGATIVO porque es CREDIT
               reference_id: createStudentPaymentsDto.payment_method_id,
-              transaction_type: 'CREDIT',
+              transaction_type: StudentBalanceTransaction.CREDIT,
               description: `DONATION-${Date.now()}-${studentId.slice(-4)}`,
               previous_balance: currentBalance,
               new_balance: currentBalance - amountPerStudent,
@@ -252,7 +253,7 @@ export class PaymentsRepository {
     return await this.prismaService.student_balance_transactions.create({
       data: {
         student_id: studentPaymentDevolution.student_id,
-        transaction_type: 'DEBIT',
+        transaction_type: StudentBalanceTransaction.DEBIT,
         amount: -studentPaymentDevolution.amount,
         previous_balance: studentBalance
           ? studentBalance.studentTransactionBalance
@@ -560,7 +561,7 @@ export class PaymentsRepository {
               student_id: payment.student_id,
               amount: Number(payment.amount), // ✅ POSITIVO porque revierte el pago (aumenta deuda)
               reference_id: paymentId,
-              transaction_type: 'DEBIT', // ✅ DEBIT porque revierte un pago
+              transaction_type: StudentBalanceTransaction.DEBIT, // ✅ DEBIT porque revierte un pago
               description: `Payment reversal: ${payment.reference_number || paymentId}`,
               previous_balance: currentBalance.studentTransactionBalance,
               new_balance:

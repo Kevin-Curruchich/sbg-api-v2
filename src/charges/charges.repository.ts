@@ -254,7 +254,9 @@ export class ChargesRepository {
             amount: data.original_amount,
             reference_id: data.charge_type_id,
             transaction_type: StudentBalanceTransaction.DEBIT,
-            description: `Charge created for student ${data.student_id}`,
+            description: data?.description_transaction_balance
+              ? data.description_transaction_balance
+              : `Charge created for student ${data.student_id}`,
             previous_balance:
               studentTransactionBalance.studentTransactionBalance,
             new_balance:
@@ -267,6 +269,35 @@ export class ChargesRepository {
       return charge;
     } catch (error) {
       console.log(error);
+      this.handleError(error);
+    }
+  }
+
+  async asignChargeToEnrollment(enrollment_id: string, charge_id: string) {
+    try {
+      return await this.prismaService.enrollment_charges.create({
+        data: {
+          enrollment_id,
+          charge_id,
+        },
+      });
+    } catch (error) {
+      this.handleError(error);
+    }
+  }
+
+  async getChargesFromEnrollmentId(enrollment_id: string) {
+    try {
+      return await this.prismaService.enrollment_charges.findMany({
+        where: {
+          enrollment_id,
+        },
+        include: {
+          charges: true,
+          enrollments: true,
+        },
+      });
+    } catch (error) {
       this.handleError(error);
     }
   }
@@ -514,6 +545,7 @@ export class ChargesRepository {
       current_amount: number;
       due_date?: Date;
       description?: string;
+      description_transaction_balance?: string;
       balanceAdjustment: number;
       amountOfCreditNote: number;
     },
@@ -569,7 +601,7 @@ export class ChargesRepository {
             updateChargeDto.balanceAdjustment > 0
               ? StudentBalanceTransaction.DEBIT
               : StudentBalanceTransaction.CREDIT,
-          description: updateChargeDto.description,
+          description: updateChargeDto.description_transaction_balance,
           previous_balance: studentTransactionBalance.studentTransactionBalance,
           new_balance:
             studentTransactionBalance.studentTransactionBalance +

@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Param, Res } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Res, Put } from '@nestjs/common';
 import { ApiBearerAuth } from '@nestjs/swagger';
 import { Response } from 'express';
 
@@ -9,6 +9,11 @@ import { GetUser } from 'src/auth/decorators/get-user.decorator';
 import User from 'src/auth/interfaces/user.interface';
 
 import { GradesService } from './grades.service';
+
+import {
+  CreateStudentEnrollmentDto,
+  UpdateStudentEnrollmentDto,
+} from './dto/create-student-enrollment.dto';
 
 import {
   AssignStudentToProgramDto,
@@ -31,6 +36,49 @@ export class GradesController {
       studentId,
       createGradeDto,
       user,
+    );
+  }
+
+  @Post('enrollment/preview')
+  enrollStudentInProgramLevelPreview(
+    @Body() createEnrollmentDto: CreateStudentEnrollmentDto,
+  ) {
+    return this.gradesService.enrollStudentInProgramLevelPreview(
+      createEnrollmentDto,
+    );
+  }
+
+  @Post('level/:studentGradeId/student/:studentId/enrollment')
+  enrollStudentInProgramLevel(
+    @Param('studentId') studentId: string,
+    @Param('studentGradeId') studentGradeId: string,
+    @Body() createEnrollmentDto: CreateStudentEnrollmentDto,
+  ) {
+    return this.gradesService.enrollStudentInProgramLevel(
+      studentId,
+      studentGradeId,
+      createEnrollmentDto,
+    );
+  }
+
+  @Get('enrollment/:enrollmentId')
+  getEnrollmentDetails(@Param('enrollmentId') enrollmentId: string) {
+    return this.gradesService.getEnrollmentDetails(enrollmentId);
+  }
+
+  @Get(':studentGradeId/enrollments')
+  getStudentGradeEnrollments(@Param('studentGradeId') studentGradeId: string) {
+    return this.gradesService.getStudentGradeEnrollments(studentGradeId);
+  }
+
+  @Put('enrollment/:enrollmentId')
+  updateEnrollment(
+    @Param('enrollmentId') enrollmentId: string,
+    @Body() updateEnrollmentDto: UpdateStudentEnrollmentDto,
+  ) {
+    return this.gradesService.updateStudentEnrollment(
+      enrollmentId,
+      updateEnrollmentDto,
     );
   }
 

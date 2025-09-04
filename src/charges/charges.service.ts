@@ -25,7 +25,7 @@ import {
 } from './dto/get-charges-created.dto';
 import { GetChargesTypes } from './dto/get-charges-types';
 import { FrequencyLabels } from './constants/frequency.constant';
-import ExcelJS from 'exceljs';
+
 import { Buffer } from 'buffer';
 import { formatDate } from 'src/common/helpers/date.helper';
 
@@ -75,6 +75,19 @@ export class ChargesService {
     };
 
     return this.chargesRepository.createChargeForStudent(data);
+  }
+
+  async asignChargeToEnrollment(enrollment_id: string, charge_id: string) {
+    return await this.chargesRepository.asignChargeToEnrollment(
+      enrollment_id,
+      charge_id,
+    );
+  }
+
+  async getChargesFromEnrollmentId(enrollment_id: string) {
+    return await this.chargesRepository.getChargesFromEnrollmentId(
+      enrollment_id,
+    );
   }
 
   createChargesForStudents(createChargeDto: CreateForStudentsChargeDto) {
@@ -245,8 +258,14 @@ export class ChargesService {
     const data = {
       student_id: originalCharge.student_id,
       current_amount: new_amount,
-      due_date: dayjs(updateChargeDto.due_date).toDate(),
+      due_date: updateChargeDto.due_date
+        ? dayjs(updateChargeDto.due_date).toDate()
+        : undefined,
       description: updateChargeDto.description,
+      description_transaction_balance:
+        updateChargeDto?.description_transaction_balance
+          ? updateChargeDto.description_transaction_balance
+          : `Cargo a ${originalCharge.student_id} `,
       balanceAdjustment: differenceAmount,
       amountOfCreditNote,
     };

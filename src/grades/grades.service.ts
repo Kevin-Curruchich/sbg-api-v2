@@ -7,7 +7,6 @@ import User from 'src/auth/interfaces/user.interface';
 import { ValidRoles } from 'src/auth/interfaces';
 
 import { ProgramsService } from 'src/programs/programs.service';
-import { StudentService } from 'src/students/students.service';
 
 import { GradesRepository } from './grades.repository';
 
@@ -15,12 +14,23 @@ import {
   AssignStudentToProgramDto,
   assignStudentToProgramLevelDto,
 } from './dto/assign-student-to-grade.dto';
+import {
+  CreateStudentEnrollmentDto,
+  UpdateStudentEnrollmentDto,
+} from './dto/create-student-enrollment.dto';
+import { EnrollmentCourseTypesConstants } from './constants/enroment-course-types.constant';
+import { ChargesService } from 'src/charges/charges.service';
+import { ChargeTypesConstants } from 'src/charges/constants/charge-types.constant';
+import { Decimal } from '@prisma/client/runtime/library';
+import { ChargeStatuses } from 'src/common/constants/charge-status.constant';
+import { formatDate } from 'src/common/helpers/date.helper';
 
 @Injectable()
 export class GradesService {
   constructor(
     private readonly gradesRepository: GradesRepository,
     private readonly programsService: ProgramsService,
+    private readonly chargesService: ChargesService,
   ) {}
 
   async assignStudentToProgram(
@@ -115,6 +125,308 @@ export class GradesService {
     }));
 
     return enhancedData;
+  }
+
+  private generateTotalEnrollmentAndChargeDescription(
+    coursesData: {
+      program_id: string;
+      name: string;
+      credits: number;
+      price: number | null;
+      course_id: string;
+    }[],
+    programsData: {
+      program_id: string;
+      programs: {
+        program_id: string;
+        name: string;
+        description: string;
+        created_at: Date;
+        updated_at: Date;
+        program_code: number;
+        default_price_credit: Decimal;
+      };
+    }[],
+  ) {
+    // Each course can have credits or price.
+    // If the course include credits we need to search the default value per credit based on the program that the course belongs to
+    // If the course include price we dont need to know the default value if the course belongs to a program with a fixed price
+    // If the course selected (from DTO) has EnrollmentCourseTypesConstants.ONLY_LISTENER the price or the default value per credit only costs 50% of the price or the default value from credits
+    // The total enrollment charge will depend on the courses selected and their respective pricing models
+    // We need to calculate the total based on the course data and the program data
+    // Example: If a course has 3 credits and the program's default price per credit is $100, the total for that course would be $300.
+    // If some course selected has a fixed price of $500, we use that instead.
+    // If some course selected has 3 credits and the default price per credit is %100 and includes EnrollmentCourseTypesConstants.ONLY_LISTENER the price or the default value per credit only costs 50% of the price or the default value from credits
+    // The total of the enrollment charge will be $950 be we have 1 course with 3 credits ($300); 1 course with a fixed price of $500 and 1 course with 3 credits and ONLY_LISTENER type ($150).
+
+    const totalEnrollmentCharge = coursesData.reduce((total, course) => {
+      const program = programsData.find(
+        (p) => p.program_id === course.program_id,
+      );
+      if (program) {
+        if (course.credits) {
+          const pricePerCredit =
+            program.programs.default_price_credit.toNumber();
+          total += course.credits * pricePerCredit;
+        } else if (course.price) {
+          total += course.price;
+        }
+      }
+      return total;
+    }, 0);
+
+    const enrollmentChargeDescription = `Total matricula ${totalEnrollmentCharge} por la asignacion de ${coursesData.map((course) => course.name).join(', ')}`;
+
+    return { totalEnrollmentCharge, enrollmentChargeDescription };
+  }
+
+  async enrollStudentInProgramLevelPreview(
+    studentEnrollment: CreateStudentEnrollmentDto,
+  ) {
+    const { courses } = studentEnrollment;
+
+    const coursesIds = courses.map((course) => course.course_id);
+
+    const coursesData =
+      await this.gradesRepository.getCreditsAndDefaultAmountOfCourses(
+        coursesIds,
+      );
+
+    const programsData =
+      await this.gradesRepository.getProgramsFromCoursesId(coursesIds);
+
+    const totalEnrollmentAndDescription =
+      this.generateTotalEnrollmentAndChargeDescription(
+        coursesData,
+        programsData,
+      );
+
+    return {
+      totalEnrollmentCharge:
+        totalEnrollmentAndDescription.totalEnrollmentCharge,
+      enrollmentChargeDescription:
+        totalEnrollmentAndDescription.enrollmentChargeDescription,
+    };
+  }
+
+  async enrollStudentInProgramLevel(
+    student_id: string,
+    student_grade_id: string,
+    studentEnrollment: CreateStudentEnrollmentDto,
+  ) {
+    const { courses } = studentEnrollment;
+
+    const coursesIds = courses.map((course) => course.course_id);
+
+    const coursesData =
+      await this.gradesRepository.getCreditsAndDefaultAmountOfCourses(
+        coursesIds,
+      );
+
+    const programsData =
+      await this.gradesRepository.getProgramsFromCoursesId(coursesIds);
+
+    const totalEnrollmentAndDescription =
+      this.generateTotalEnrollmentAndChargeDescription(
+        coursesData,
+        programsData,
+      );
+
+    const total_enrollment_charge =
+      totalEnrollmentAndDescription.totalEnrollmentCharge;
+
+    const enrollment_charge_description =
+      totalEnrollmentAndDescription.enrollmentChargeDescription;
+
+    const enrollment = await this.gradesRepository.enrollStudentInProgramLevel(
+      student_id,
+      student_grade_id,
+      { ...studentEnrollment, enrollment_date: dayjs().toISOString() },
+    );
+
+    const chargeForEnrollment =
+      await this.chargesService.createChargeForStudent({
+        student_id,
+        charge_type_id: ChargeTypesConstants.ENROLLMENT,
+        original_amount: total_enrollment_charge,
+        due_date: new Date(),
+        description: enrollment_charge_description,
+        description_transaction_balance: `Cargo por matrícula de ${student_id} para matrícula en ${enrollment.enrollment_id}`,
+      });
+
+    await this.chargesService.asignChargeToEnrollment(
+      enrollment.enrollment_id,
+      chargeForEnrollment[0].charge_id,
+    );
+
+    if (studentEnrollment.include_registration) {
+      const chargeForRegistration =
+        await this.chargesService.createChargeForStudent({
+          student_id,
+          charge_type_id: ChargeTypesConstants.INSCRIPTION,
+          original_amount: 250,
+          due_date: new Date(),
+          description: 'Inscripcion de estudiante',
+          description_transaction_balance: `Cargo por inscripción de ${student_id} para matrícula en ${enrollment.enrollment_id}`,
+        });
+
+      await this.chargesService.asignChargeToEnrollment(
+        enrollment.enrollment_id,
+        chargeForRegistration[0].charge_id,
+      );
+    }
+
+    return {
+      enrollment,
+      chargeForEnrollment,
+    };
+  }
+
+  async updateStudentEnrollment(
+    enrollment_id: string,
+    updateData: UpdateStudentEnrollmentDto,
+  ) {
+    await this.gradesRepository.updateStudentEnrollment(enrollment_id, {
+      ...updateData,
+      enrollment_date: dayjs(updateData.enrollment_date).toISOString(),
+    });
+
+    const enrollmentData =
+      await this.gradesRepository.getEnrollmentDetails(enrollment_id);
+
+    const coursesIds = updateData.courses.map((course) => course.course_id);
+
+    const chargesFromEnrollment =
+      await this.chargesService.getChargesFromEnrollmentId(enrollment_id);
+
+    const coursesData =
+      await this.gradesRepository.getCreditsAndDefaultAmountOfCourses(
+        coursesIds,
+      );
+
+    const programsData =
+      await this.gradesRepository.getProgramsFromCoursesId(coursesIds);
+
+    const enrollmentTotalAmountAndDescription =
+      this.generateTotalEnrollmentAndChargeDescription(
+        coursesData,
+        programsData,
+      );
+
+    // Update enrollment charge
+    for (const charge of chargesFromEnrollment) {
+      const { charge_type_id } = charge.charges;
+
+      if (charge_type_id === ChargeTypesConstants.ENROLLMENT) {
+        await this.chargesService.updateChargeStudent(charge.charge_id, {
+          original_amount:
+            enrollmentTotalAmountAndDescription.totalEnrollmentCharge,
+          description:
+            enrollmentTotalAmountAndDescription.enrollmentChargeDescription,
+        });
+      }
+
+      if (charge_type_id === ChargeTypesConstants.INSCRIPTION) {
+        if (!updateData.include_registration) {
+          // Registration charge should be removed
+          await this.chargesService.updateChargeStudent(charge.charge_id, {
+            original_amount: 0,
+            description: 'Cargo por inscripción eliminado',
+          });
+          await this.chargesService.updateChargeStatus(charge.charge_id, {
+            charge_status_id: ChargeStatuses.TOTAL_PAID,
+          });
+        } else {
+          // Registration charge should be updated
+          await this.chargesService.updateChargeStudent(charge.charge_id, {
+            original_amount: 250,
+            description: 'Inscripcion de estudiante',
+            description_transaction_balance: `Cargo por inscripción para matrícula en ${enrollment_id}`,
+          });
+        }
+      }
+    }
+
+    // If registration is included but no charge exists, create it
+    const hasRegistrationCharge = chargesFromEnrollment.some(
+      (charge) =>
+        charge.charges.charge_type_id === ChargeTypesConstants.INSCRIPTION,
+    );
+
+    if (updateData.include_registration && !hasRegistrationCharge) {
+      const chargeForRegistration =
+        await this.chargesService.createChargeForStudent({
+          student_id: enrollmentData.student_id,
+          charge_type_id: ChargeTypesConstants.INSCRIPTION,
+          original_amount: 250,
+          due_date: new Date(),
+          description: 'Inscripcion de estudiante',
+          description_transaction_balance: `Cargo por inscripción para matrícula en ${enrollment_id}`,
+        });
+
+      await this.chargesService.asignChargeToEnrollment(
+        enrollment_id,
+        chargeForRegistration[0].charge_id,
+      );
+    }
+  }
+
+  async getStudentGradeEnrollments(studentGradeId: string) {
+    const enrollments =
+      await this.gradesRepository.getStudentGradeEnrollments(studentGradeId);
+
+    const enhancedEnrollments = enrollments.map((enrollment) => ({
+      enrollment_id: enrollment.enrollment_id,
+      term: enrollment.terms,
+      enrollment_date: formatDate(enrollment.enrollment_date, 'YYYY-MM-DD'),
+      enrollment_date_for: formatDate(enrollment.enrollment_date, 'DD/MM/YYYY'),
+      enrollment_status: enrollment.enrollment_statuses,
+      enrollment_courses: enrollment.enrollment_courses.map(
+        (enrollmentCourse) => ({
+          course_id: enrollmentCourse.course_id,
+          course: enrollmentCourse.courses,
+        }),
+      ),
+      description: enrollment.description,
+    }));
+
+    return enhancedEnrollments;
+  }
+
+  async getEnrollmentDetails(enrollmentId: string) {
+    const enrollmentDetails =
+      await this.gradesRepository.getEnrollmentDetails(enrollmentId);
+
+    const include_registration = enrollmentDetails.enrollment_charges.some(
+      (enrollmentCharge) =>
+        enrollmentCharge.charges.charge_types.charge_type_id ===
+        ChargeTypesConstants.INSCRIPTION,
+    );
+
+    const enrollmentDetailsEnhanced = {
+      enrollment_id: enrollmentDetails.enrollment_id,
+      term: enrollmentDetails.terms,
+      enrollment_date: formatDate(
+        enrollmentDetails.enrollment_date,
+        'YYYY-MM-DD',
+      ),
+      enrollment_date_for: formatDate(
+        enrollmentDetails.enrollment_date,
+        'DD/MM/YYYY',
+      ),
+      enrollment_status: enrollmentDetails.enrollment_statuses,
+      enrollment_courses: enrollmentDetails.enrollment_courses.map(
+        (enrollmentCourse) => ({
+          course_id: enrollmentCourse.course_id,
+          course: enrollmentCourse.courses,
+          enrollment_course_type_id: enrollmentCourse.enrollment_course_type_id,
+        }),
+      ),
+      include_registration,
+      description: enrollmentDetails.description,
+    };
+
+    return enrollmentDetailsEnhanced;
   }
 
   async generateStudentGradesReport(): Promise<Buffer> {

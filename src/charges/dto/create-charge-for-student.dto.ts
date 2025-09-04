@@ -16,6 +16,10 @@ export class CreateForStudentChargeDto {
   @IsOptional()
   @IsString()
   description?: string;
+
+  @IsOptional()
+  @IsString()
+  description_transaction_balance?: string;
 }
 
 export class CreateForStudentChargeRepositoryDto extends CreateForStudentChargeDto {

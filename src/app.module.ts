@@ -13,6 +13,7 @@ import { ReportsModule } from './reports/reports.module';
 import { GeneralModule } from './general/general.module';
 import { GradesModule } from './grades/grades.module';
 import { TermsModule } from './terms/terms.module';
+import { CoursesModule } from './courses/courses.module';
 
 @Module({
   controllers: [AppController],
@@ -30,6 +31,7 @@ import { TermsModule } from './terms/terms.module';
     GeneralModule,
     GradesModule,
     TermsModule,
+    CoursesModule,
   ],
 })
 export class AppModule {}
