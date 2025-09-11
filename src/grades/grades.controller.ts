@@ -1,5 +1,15 @@
-import { Controller, Get, Post, Body, Param, Res, Put } from '@nestjs/common';
-import { ApiBearerAuth } from '@nestjs/swagger';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Param,
+  Res,
+  Put,
+  UseInterceptors,
+  UploadedFile,
+} from '@nestjs/common';
+import { ApiBearerAuth, ApiBody, ApiConsumes } from '@nestjs/swagger';
 import { Response } from 'express';
 
 import { Auth } from 'src/auth/decorators/auth.decorator';
@@ -19,6 +29,7 @@ import {
   AssignStudentToProgramDto,
   assignStudentToProgramLevelDto,
 } from './dto/assign-student-to-grade.dto';
+import { FileInterceptor } from '@nestjs/platform-express';
 
 @Controller('grades')
 @Auth(ValidRoles.admin, ValidRoles.superuser, ValidRoles.academic)
@@ -39,15 +50,6 @@ export class GradesController {
     );
   }
 
-  @Post('enrollment/preview')
-  enrollStudentInProgramLevelPreview(
-    @Body() createEnrollmentDto: CreateStudentEnrollmentDto,
-  ) {
-    return this.gradesService.enrollStudentInProgramLevelPreview(
-      createEnrollmentDto,
-    );
-  }
-
   @Post('level/:studentGradeId/student/:studentId/enrollment')
   enrollStudentInProgramLevel(
     @Param('studentId') studentId: string,
@@ -59,6 +61,41 @@ export class GradesController {
       studentGradeId,
       createEnrollmentDto,
     );
+  }
+
+  @Post('enrollment/:enrollmentId/evidence')
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        file: {
+          type: 'string',
+          format: 'binary',
+        },
+      },
+    },
+  })
+  @UseInterceptors(
+    FileInterceptor('file', {
+      limits: { fileSize: 3 * 1024 * 1024 }, // 3MB file size limit
+      fileFilter: (_, file, callback) => {
+        // Check file type
+        if (!file.mimetype.match(/^image\/(jpeg|jpg|png)$/)) {
+          return callback(
+            new Error('Only JPG and PNG image files are allowed'),
+            false,
+          );
+        }
+        callback(null, true);
+      },
+    }),
+  )
+  uploadEnrollmentEvidence(
+    @Param('enrollmentId') enrollmentId: string,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    return this.gradesService.uploadEnrollmentEvidence(enrollmentId, file);
   }
 
   @Get('enrollment/:enrollmentId')

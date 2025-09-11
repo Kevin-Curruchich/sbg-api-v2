@@ -1,7 +1,13 @@
 import { ConflictException, Injectable } from '@nestjs/common';
+
 import * as dayjs from 'dayjs';
 import * as ExcelJS from 'exceljs';
 import { Buffer } from 'buffer';
+
+import { Decimal } from '@prisma/client/runtime/library';
+
+import { v4 as uuidv4 } from 'uuid';
+import * as path from 'path';
 
 import User from 'src/auth/interfaces/user.interface';
 import { ValidRoles } from 'src/auth/interfaces';
@@ -18,12 +24,12 @@ import {
   CreateStudentEnrollmentDto,
   UpdateStudentEnrollmentDto,
 } from './dto/create-student-enrollment.dto';
-import { EnrollmentCourseTypesConstants } from './constants/enroment-course-types.constant';
+
 import { ChargesService } from 'src/charges/charges.service';
 import { ChargeTypesConstants } from 'src/charges/constants/charge-types.constant';
-import { Decimal } from '@prisma/client/runtime/library';
 import { ChargeStatuses } from 'src/common/constants/charge-status.constant';
 import { formatDate } from 'src/common/helpers/date.helper';
+import { StorageService } from 'src/common/storage.service';
 
 @Injectable()
 export class GradesService {
@@ -31,6 +37,7 @@ export class GradesService {
     private readonly gradesRepository: GradesRepository,
     private readonly programsService: ProgramsService,
     private readonly chargesService: ChargesService,
+    private readonly storageService: StorageService,
   ) {}
 
   async assignStudentToProgram(
@@ -70,8 +77,6 @@ export class GradesService {
       );
 
     const student_program_code = `${program.program_code}-${currentYear.toString().slice(-2)}-${studentsAssignedToProgramCurrentYear + 1}`;
-
-    console.log({ student_program_code });
 
     const data = {
       student_id: studentId,
@@ -127,6 +132,47 @@ export class GradesService {
     return enhancedData;
   }
 
+  async uploadEnrollmentEvidence(
+    enrollmentId: string,
+    file: Express.Multer.File,
+  ) {
+    if (!file) {
+      throw new ConflictException('File is required');
+    }
+
+    const enrollmentDetails =
+      await this.gradesRepository.getEnrollmentEvidence(enrollmentId);
+
+    if (enrollmentDetails.length > 0) {
+      // Delete previous file
+      await this.storageService.deleteFile(enrollmentDetails[0].file_path);
+
+      await this.gradesRepository.deleteEnrollmentEvidence(
+        enrollmentDetails[0].enrollment_evidence_id,
+      );
+    }
+
+    try {
+      const ext = path.extname(file.originalname).toLowerCase();
+      const uniqueFileName = `${uuidv4()}${ext}`;
+      const filePath = `enrollments/${enrollmentId}/${uniqueFileName}`;
+
+      const fileUrl = await this.storageService.uploadFile(
+        file.buffer,
+        filePath,
+      );
+
+      await this.gradesRepository.createEnrollmentEvidence(
+        enrollmentId,
+        filePath,
+      );
+
+      return { fileUrl };
+    } catch (error) {
+      throw new ConflictException(`Failed to upload file: ${error.message}`);
+    }
+  }
+
   private generateTotalEnrollmentAndChargeDescription(
     coursesData: {
       program_id: string;
@@ -180,64 +226,11 @@ export class GradesService {
     return { totalEnrollmentCharge, enrollmentChargeDescription };
   }
 
-  async enrollStudentInProgramLevelPreview(
-    studentEnrollment: CreateStudentEnrollmentDto,
-  ) {
-    const { courses } = studentEnrollment;
-
-    const coursesIds = courses.map((course) => course.course_id);
-
-    const coursesData =
-      await this.gradesRepository.getCreditsAndDefaultAmountOfCourses(
-        coursesIds,
-      );
-
-    const programsData =
-      await this.gradesRepository.getProgramsFromCoursesId(coursesIds);
-
-    const totalEnrollmentAndDescription =
-      this.generateTotalEnrollmentAndChargeDescription(
-        coursesData,
-        programsData,
-      );
-
-    return {
-      totalEnrollmentCharge:
-        totalEnrollmentAndDescription.totalEnrollmentCharge,
-      enrollmentChargeDescription:
-        totalEnrollmentAndDescription.enrollmentChargeDescription,
-    };
-  }
-
   async enrollStudentInProgramLevel(
     student_id: string,
     student_grade_id: string,
     studentEnrollment: CreateStudentEnrollmentDto,
   ) {
-    const { courses } = studentEnrollment;
-
-    const coursesIds = courses.map((course) => course.course_id);
-
-    const coursesData =
-      await this.gradesRepository.getCreditsAndDefaultAmountOfCourses(
-        coursesIds,
-      );
-
-    const programsData =
-      await this.gradesRepository.getProgramsFromCoursesId(coursesIds);
-
-    const totalEnrollmentAndDescription =
-      this.generateTotalEnrollmentAndChargeDescription(
-        coursesData,
-        programsData,
-      );
-
-    const total_enrollment_charge =
-      totalEnrollmentAndDescription.totalEnrollmentCharge;
-
-    const enrollment_charge_description =
-      totalEnrollmentAndDescription.enrollmentChargeDescription;
-
     const enrollment = await this.gradesRepository.enrollStudentInProgramLevel(
       student_id,
       student_grade_id,
@@ -248,9 +241,9 @@ export class GradesService {
       await this.chargesService.createChargeForStudent({
         student_id,
         charge_type_id: ChargeTypesConstants.ENROLLMENT,
-        original_amount: total_enrollment_charge,
-        due_date: new Date(),
-        description: enrollment_charge_description,
+        original_amount: studentEnrollment.enrollment_charge_total,
+        due_date: dayjs(studentEnrollment.enrollment_date).toDate(),
+        description: studentEnrollment.enrollment_charge_description,
         description_transaction_balance: `Cargo por matrícula de ${student_id} para matrícula en ${enrollment.enrollment_id}`,
       });
 
@@ -294,24 +287,8 @@ export class GradesService {
     const enrollmentData =
       await this.gradesRepository.getEnrollmentDetails(enrollment_id);
 
-    const coursesIds = updateData.courses.map((course) => course.course_id);
-
     const chargesFromEnrollment =
       await this.chargesService.getChargesFromEnrollmentId(enrollment_id);
-
-    const coursesData =
-      await this.gradesRepository.getCreditsAndDefaultAmountOfCourses(
-        coursesIds,
-      );
-
-    const programsData =
-      await this.gradesRepository.getProgramsFromCoursesId(coursesIds);
-
-    const enrollmentTotalAmountAndDescription =
-      this.generateTotalEnrollmentAndChargeDescription(
-        coursesData,
-        programsData,
-      );
 
     // Update enrollment charge
     for (const charge of chargesFromEnrollment) {
@@ -319,10 +296,8 @@ export class GradesService {
 
       if (charge_type_id === ChargeTypesConstants.ENROLLMENT) {
         await this.chargesService.updateChargeStudent(charge.charge_id, {
-          original_amount:
-            enrollmentTotalAmountAndDescription.totalEnrollmentCharge,
-          description:
-            enrollmentTotalAmountAndDescription.enrollmentChargeDescription,
+          original_amount: updateData.enrollment_charge_total,
+          description: updateData.enrollment_charge_description,
         });
       }
 
@@ -369,6 +344,8 @@ export class GradesService {
         chargeForRegistration[0].charge_id,
       );
     }
+
+    return enrollmentData;
   }
 
   async getStudentGradeEnrollments(studentGradeId: string) {
@@ -403,6 +380,20 @@ export class GradesService {
         ChargeTypesConstants.INSCRIPTION,
     );
 
+    const enrollment_charge_total = enrollmentDetails.enrollment_charges.find(
+      (enrollmentCharge) =>
+        enrollmentCharge.charges.charge_types.charge_type_id ===
+        ChargeTypesConstants.ENROLLMENT,
+    )?.charges.current_amount;
+
+    let enrollmentEvidence = null;
+
+    if (enrollmentDetails?.enrollment_evidence?.length > 0) {
+      enrollmentEvidence = await this.storageService.getFileUrl(
+        enrollmentDetails?.enrollment_evidence[0]?.file_path || '',
+      );
+    }
+
     const enrollmentDetailsEnhanced = {
       enrollment_id: enrollmentDetails.enrollment_id,
       term: enrollmentDetails.terms,
@@ -424,6 +415,9 @@ export class GradesService {
       ),
       include_registration,
       description: enrollmentDetails.description,
+      enrollment_evidence: enrollmentEvidence,
+      credits: enrollmentDetails.credits,
+      enrollment_charge_total: enrollment_charge_total || 0,
     };
 
     return enrollmentDetailsEnhanced;

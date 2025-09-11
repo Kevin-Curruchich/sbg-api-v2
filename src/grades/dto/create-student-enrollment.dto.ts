@@ -1,24 +1,32 @@
 import { PartialType } from '@nestjs/swagger';
-import { IsBoolean, IsDateString, IsOptional, IsString } from 'class-validator';
-import { ValidateNested, ArrayMinSize } from 'class-validator';
-import { Type } from 'class-transformer';
+import {
+  IsBoolean,
+  IsDateString,
+  IsNumber,
+  IsOptional,
+  IsString,
+} from 'class-validator';
 
 export class CreateStudentEnrollmentDto {
   @IsString()
   term_id: string;
 
+  @IsNumber()
+  credits: number;
+
   @IsDateString()
   enrollment_date: string;
+
+  @IsNumber()
+  enrollment_charge_total: number;
+
+  @IsString()
+  @IsOptional()
+  enrollment_charge_description?: string;
 
   @IsString()
   @IsOptional()
   description?: string;
-
-  @ValidateNested({ each: true })
-  @Type(() => CoursesToEnrollDto)
-  @ArrayMinSize(1)
-  @IsOptional()
-  courses: CoursesToEnrollDto[];
 
   @IsBoolean()
   include_registration: boolean;

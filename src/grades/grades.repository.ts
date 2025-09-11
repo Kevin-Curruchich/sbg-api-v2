@@ -204,7 +204,7 @@ export class GradesRepository {
     studentEnrollment: CreateStudentEnrollmentDto,
   ) {
     try {
-      const { term_id, enrollment_date, courses } = studentEnrollment;
+      const { term_id, enrollment_date } = studentEnrollment;
 
       return await this.prismaService.$transaction(async (prisma) => {
         const enrollment = await prisma.enrollments.create({
@@ -214,27 +214,15 @@ export class GradesRepository {
             student_grade_id,
             enrollment_date,
             description: studentEnrollment.description,
+            credits: studentEnrollment.credits,
             enrollment_status_id: EnrollmentStatusConstants.ACTIVE,
           },
         });
 
-        const coursePromises = courses.map((course) =>
-          prisma.enrollment_courses.create({
-            data: {
-              enrollment_id: enrollment.enrollment_id,
-              course_id: course.course_id,
-              enrollment_course_type_id:
-                course?.enrollment_course_type_id ||
-                EnrollmentCourseTypesConstants.REGULAR,
-            },
-          }),
-        );
-
-        await Promise.all(coursePromises);
-
         return enrollment;
       });
     } catch (error) {
+      console.log(error);
       this.handleErrors(error);
     }
   }
@@ -244,39 +232,17 @@ export class GradesRepository {
     updateData: Partial<CreateStudentEnrollmentDto>,
   ) {
     try {
-      const { courses, ...enrollmentFields } = updateData;
-
       return await this.prismaService.$transaction(async (prisma) => {
         // Update enrollment fields
         const updatedEnrollment = await prisma.enrollments.update({
           where: { enrollment_id },
           data: {
-            term_id: enrollmentFields.term_id,
-            enrollment_date: enrollmentFields.enrollment_date,
-            description: enrollmentFields.description,
+            term_id: updateData.term_id,
+            enrollment_date: updateData.enrollment_date,
+            description: updateData.description,
+            credits: updateData.credits,
           },
         });
-
-        // Delete and create courses provided
-        if (courses && Array.isArray(courses)) {
-          // Delete existing courses for this enrollment
-          await prisma.enrollment_courses.deleteMany({
-            where: { enrollment_id },
-          });
-
-          const coursePromises = courses.map((course) =>
-            prisma.enrollment_courses.create({
-              data: {
-                enrollment_id,
-                course_id: course.course_id,
-                enrollment_course_type_id:
-                  course?.enrollment_course_type_id ||
-                  EnrollmentCourseTypesConstants.REGULAR,
-              },
-            }),
-          );
-          await Promise.all(coursePromises);
-        }
 
         return updatedEnrollment;
       });
@@ -356,12 +322,48 @@ export class GradesRepository {
             charges: {
               select: {
                 charge_types: true,
+                current_amount: true,
+                original_amount: true,
               },
             },
           },
         },
+        enrollment_evidence: true,
       },
     });
+  }
+
+  async createEnrollmentEvidence(enrollmentId: string, filePath: string) {
+    try {
+      return await this.prismaService.enrollment_evidence.create({
+        data: {
+          enrollment_id: enrollmentId,
+          file_path: filePath,
+        },
+      });
+    } catch (error) {
+      this.handleErrors(error);
+    }
+  }
+
+  async getEnrollmentEvidence(enrollmentId: string) {
+    try {
+      return await this.prismaService.enrollment_evidence.findMany({
+        where: { enrollment_id: enrollmentId },
+      });
+    } catch (error) {
+      this.handleErrors(error);
+    }
+  }
+
+  async deleteEnrollmentEvidence(evidenceId: string) {
+    try {
+      return await this.prismaService.enrollment_evidence.delete({
+        where: { enrollment_evidence_id: evidenceId },
+      });
+    } catch (error) {
+      this.handleErrors(error);
+    }
   }
 
   private handleErrors(error: Prisma.PrismaClientKnownRequestError | Error) {

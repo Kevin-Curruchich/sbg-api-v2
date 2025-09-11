@@ -7,10 +7,11 @@ import { PrismaModule } from 'src/prisma/prisma.module';
 import { ProgramsModule } from 'src/programs/programs.module';
 import { StudentsModule } from 'src/students/students.module';
 import { ChargesModule } from 'src/charges/charges.module';
+import { StorageService } from 'src/common/storage.service';
 
 @Module({
   controllers: [GradesController],
-  providers: [GradesService, GradesRepository],
+  providers: [GradesService, GradesRepository, StorageService],
   imports: [
     PrismaModule,
     AuthModule,
