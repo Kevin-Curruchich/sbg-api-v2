@@ -254,13 +254,14 @@ export class PaymentsRepository {
       data: {
         student_id: studentPaymentDevolution.student_id,
         transaction_type: StudentBalanceTransaction.DEBIT,
-        amount: -studentPaymentDevolution.amount,
+        amount: studentPaymentDevolution.amount,
         previous_balance: studentBalance
           ? studentBalance.studentTransactionBalance
           : 0,
-        new_balance:
-          (studentBalance ? studentBalance.studentTransactionBalance : 0) -
-          studentPaymentDevolution.amount,
+        new_balance: studentBalance
+          ? studentBalance.studentTransactionBalance +
+            studentPaymentDevolution.amount
+          : studentPaymentDevolution.amount,
         description: `PAYMENT_DEVOLUTION-${dayjs().format('YYYY-MM-DD HH:mm:ss')}-${studentPaymentDevolution.reason}`,
       },
     });

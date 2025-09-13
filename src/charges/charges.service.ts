@@ -165,6 +165,9 @@ export class ChargesService {
   async getChargesByStudentId(
     studentId: string,
     chargesQuery: StudentChargesQueryDto,
+    orderBy?: {
+      due_date?: 'asc' | 'desc';
+    },
   ) {
     const queryWithDate = {
       ...chargesQuery,
@@ -176,6 +179,7 @@ export class ChargesService {
       await this.chargesRepository.getChargesByStudentId(
         studentId,
         queryWithDate,
+        orderBy,
       );
 
     //map the student charge and payment and return by charge the total amount paid and the total amount due for each charge

@@ -152,6 +152,9 @@ export class PaymentsService {
       {
         charge_status_id: ChargeStatuses.PENDING,
       },
+      {
+        due_date: 'asc',
+      },
     );
 
     if (studentCharges.length === 0) {

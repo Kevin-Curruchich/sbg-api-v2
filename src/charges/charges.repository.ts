@@ -385,6 +385,9 @@ export class ChargesRepository {
   async getChargesByStudentId(
     studentId: string,
     chargesQuery: StudentChargeRepositoryDto,
+    orderBy?: {
+      due_date?: 'asc' | 'desc';
+    },
   ) {
     const { due_date } = chargesQuery;
 
@@ -443,7 +446,7 @@ export class ChargesRepository {
       },
       orderBy: [
         {
-          due_date: 'desc',
+          due_date: orderBy?.due_date || 'desc',
         },
         {
           current_amount: 'desc',
