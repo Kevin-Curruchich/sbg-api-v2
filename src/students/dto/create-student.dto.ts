@@ -27,3 +27,11 @@ export class CreateStudentDto {
   @IsDateString()
   birthday: Date;
 }
+
+export class AssignStudentToProgramDto {
+  @IsString()
+  program_id: string;
+
+  @IsString()
+  student_type_id: string;
+}

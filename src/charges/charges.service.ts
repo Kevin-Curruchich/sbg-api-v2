@@ -11,12 +11,23 @@ import User from 'src/auth/interfaces/user.interface';
 import { CreateChargeDto } from './dto/create-charge.dto';
 import { UpdateStudentChargeDto } from './dto/update-student-charge.dto';
 
-import { CreateForStudentChargeDto } from './dto/create-charge-for-student.dto';
+import {
+  CreateForStudentChargeDto,
+  CreateForStudentsChargeDto,
+} from './dto/create-charge-for-student.dto';
 
 import { ChargesRepository } from './charges.repository';
 import { ChargeStatuses } from 'src/common/constants/charge-status.constant';
 import { StudentChargesQueryDto } from './dto/student-charges-query.dto';
-import { GetChargesCreated } from './dto/get-charges-created.dto';
+import {
+  GetChargesAppliedToStudentsByFiltersDto,
+  GetChargesCreated,
+} from './dto/get-charges-created.dto';
+import { GetChargesTypes } from './dto/get-charges-types';
+import { FrequencyLabels } from './constants/frequency.constant';
+
+import { Buffer } from 'buffer';
+import { formatDate } from 'src/common/helpers/date.helper';
 
 @Injectable()
 export class ChargesService {
@@ -25,8 +36,34 @@ export class ChargesService {
     private readonly studentsService: StudentService,
   ) {}
 
-  create(createChargeDto: CreateChargeDto) {
-    return 'This action adds a new charge';
+  createChargeType(createChargeDto: CreateChargeDto) {
+    return this.chargesRepository.createChargeType(createChargeDto);
+  }
+
+  async getChargeTypes(query: GetChargesTypes) {
+    const { data, total } = await this.chargesRepository.getChargeTypes(query);
+
+    const responseEnhanced = data.map((type) => ({
+      ...type,
+      frequency: {
+        frequency_id: type.frequency,
+        name: FrequencyLabels[type.frequency],
+      },
+    }));
+
+    return {
+      data: responseEnhanced,
+      total,
+    };
+  }
+
+  async getChargeFrequency() {
+    const frequencies = await this.chargesRepository.getChargeFrequency();
+
+    return frequencies.map((frequency) => ({
+      frequency_id: frequency,
+      name: FrequencyLabels[frequency],
+    }));
   }
 
   createChargeForStudent(createChargeDto: CreateForStudentChargeDto) {
@@ -38,6 +75,29 @@ export class ChargesService {
     };
 
     return this.chargesRepository.createChargeForStudent(data);
+  }
+
+  async asignChargeToEnrollment(enrollment_id: string, charge_id: string) {
+    return await this.chargesRepository.asignChargeToEnrollment(
+      enrollment_id,
+      charge_id,
+    );
+  }
+
+  async getChargesFromEnrollmentId(enrollment_id: string) {
+    return await this.chargesRepository.getChargesFromEnrollmentId(
+      enrollment_id,
+    );
+  }
+
+  createChargesForStudents(createChargeDto: CreateForStudentsChargeDto) {
+    const data = {
+      ...createChargeDto,
+      current_amount: createChargeDto.original_amount,
+      due_date: dayjs(createChargeDto.due_date).toDate(),
+    };
+
+    return this.chargesRepository.createChargesForStudents(data);
   }
 
   async getAllCharges(query: GetChargesCreated, user: User) {
@@ -86,8 +146,12 @@ export class ChargesService {
     };
   }
 
-  getChargeTypesByProgramId(programId: string) {
-    return this.chargesRepository.getChargesByProgramId(programId);
+  getChargesApplyToStudentsByFilters(
+    queryParams: GetChargesAppliedToStudentsByFiltersDto,
+  ) {
+    return this.chargesRepository.getChargesApplyToStudentsByFilters(
+      queryParams,
+    );
   }
 
   getChargeStatuses() {
@@ -101,6 +165,9 @@ export class ChargesService {
   async getChargesByStudentId(
     studentId: string,
     chargesQuery: StudentChargesQueryDto,
+    orderBy?: {
+      due_date?: 'asc' | 'desc';
+    },
   ) {
     const queryWithDate = {
       ...chargesQuery,
@@ -112,6 +179,7 @@ export class ChargesService {
       await this.chargesRepository.getChargesByStudentId(
         studentId,
         queryWithDate,
+        orderBy,
       );
 
     //map the student charge and payment and return by charge the total amount paid and the total amount due for each charge
@@ -155,17 +223,12 @@ export class ChargesService {
   }
 
   async getChargesApplyToStudent(studentId: string) {
-    const student = await this.studentsService.getStudentGeneralInfo(studentId);
-    const studentGrade =
-      await this.studentsService.getLastStudentGrade(studentId);
+    const studentGrade = await this.studentsService.getStudentGrades(studentId);
 
-    const { student_types } = student;
-
-    const lastProgramStudent = studentGrade;
+    const program_ids = studentGrade.map((grade) => grade.programs.program_id);
 
     return await this.chargesRepository.getChargesApplyToStudent({
-      student_type_id: student_types.student_type_id,
-      program_level_id: lastProgramStudent.program_levels.program_level_id,
+      program_ids,
     });
   }
 
@@ -192,11 +255,21 @@ export class ChargesService {
       amountOfCreditNote = originalChargePayed - new_amount;
     }
 
+    //Balance adjustment is the difference between the new amount and the original amount
+    //if balance adjustment is negative, it means that the student has a credit note
+    //if balance adjustment is positive, it means that the student has to pay more
+
     const data = {
       student_id: originalCharge.student_id,
       current_amount: new_amount,
-      due_date: dayjs(updateChargeDto.due_date).toDate(),
+      due_date: updateChargeDto.due_date
+        ? dayjs(updateChargeDto.due_date).toDate()
+        : undefined,
       description: updateChargeDto.description,
+      description_transaction_balance:
+        updateChargeDto?.description_transaction_balance
+          ? updateChargeDto.description_transaction_balance
+          : `Cargo a ${originalCharge.student_id} `,
       balanceAdjustment: differenceAmount,
       amountOfCreditNote,
     };
@@ -255,12 +328,104 @@ export class ChargesService {
       totalCharges: formatCurrency(result.totalCharges),
       totalPaid: formatCurrency(result.totalPaid),
       collectionRate: result.collectionRate.toFixed(2) + '%',
-      rawData: {
-        totalCharges: result.totalCharges,
-        totalPaid: result.totalPaid,
-        collectionRate: result.collectionRate,
-      },
     };
+  }
+
+  async generateStudentChargesReport(filters: {
+    programId?: string;
+    studentTypeId?: string;
+  }): Promise<Buffer> {
+    const charges =
+      await this.chargesRepository.getDetailedChargesReport(filters);
+
+    const ExcelJS = require('exceljs');
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('Student Charges');
+
+    worksheet.columns = [
+      { header: 'StudentID', key: 'student_id', width: 0 },
+      { header: 'Nombre del Estudiante', key: 'student_name', width: 30 },
+      { header: 'Programa', key: 'program', width: 30 },
+      { header: 'Tipo de Cobro', key: 'charge_type', width: 20 },
+      { header: 'Monto', key: 'amount', width: 15 },
+      { header: 'Monto Pagado', key: 'payed_amount', width: 15 },
+      { header: 'Saldo', key: 'amount_due', width: 15 },
+      { header: 'Estado', key: 'status', width: 15 },
+      { header: 'Fecha de Vencimiento', key: 'due_date', width: 20 },
+    ];
+
+    charges.forEach((charge) => {
+      const payedAmount = charge.payment_details.reduce(
+        (sum, detail) => sum + Number(detail.applied_amount),
+        0,
+      );
+
+      const amountDue = Number(charge.current_amount) - payedAmount;
+
+      worksheet.addRow({
+        student_id: charge.students.student_id,
+        student_name: `${charge.students.first_name} ${charge.students.last_name}`,
+        program:
+          charge.students.student_grades[0]?.program_levels.programs.name ||
+          'N/A',
+        charge_type: charge.charge_types.name,
+        amount: Number(charge.current_amount),
+        payed_amount: payedAmount,
+        amount_due: Number(amountDue),
+        status: charge.charge_statuses.name,
+        due_date: formatDate(charge.due_date, 'DD/MM/YYYY') || 'N/A',
+      });
+    });
+
+    const buffer = await workbook.xlsx.writeBuffer();
+
+    return buffer;
+  }
+
+  async generateStudentSpecificChargesReport(
+    studentId: string,
+  ): Promise<Buffer> {
+    const charges =
+      await this.chargesRepository.getStudentChargesWithDetails(studentId);
+
+    const ExcelJS = require('exceljs');
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('Student Charges');
+
+    worksheet.columns = [
+      { header: 'charge_id', key: 'charge_id', width: 0 },
+      { header: 'Cobro', key: 'charge_type', width: 20 },
+      { header: 'Descripción', key: 'description', width: 30 },
+      { header: 'Monto Original', key: 'original_amount', width: 15 },
+      { header: 'Monto Actual', key: 'current_amount', width: 15 },
+      { header: 'Total Pagado', key: 'total_paid', width: 15 },
+      { header: 'Monto Pendiente', key: 'outstanding_amount', width: 15 },
+      { header: 'Estado', key: 'status', width: 15 },
+      { header: 'Fecha de Vencimiento', key: 'due_date', width: 20 },
+    ];
+
+    charges.forEach((charge) => {
+      const totalPaid = charge.payment_details.reduce(
+        (sum, detail) => sum + Number(detail.applied_amount),
+        0,
+      );
+
+      const outstandingAmount = Number(charge.current_amount) - totalPaid;
+
+      worksheet.addRow({
+        charge_id: charge.charge_id,
+        charge_type: charge.charge_types.name,
+        description: charge.description || 'N/A',
+        original_amount: Number(charge.original_amount),
+        current_amount: Number(charge.current_amount),
+        outstanding_amount: outstandingAmount,
+        total_paid: totalPaid,
+        status: charge.charge_statuses.name,
+        due_date: formatDate(charge.due_date, 'DD/MM/YYYY'),
+      });
+    });
+
+    return workbook.xlsx.writeBuffer() as Promise<Buffer>;
   }
 
   remove(id: number) {

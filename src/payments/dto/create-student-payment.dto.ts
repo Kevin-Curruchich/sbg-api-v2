@@ -30,10 +30,6 @@ export class CreateStudentPaymentDto {
   @ValidateNested({ each: true })
   @Type(() => PaymentDetails)
   payment_details: PaymentDetails[];
-
-  @IsOptional()
-  @IsBoolean()
-  is_from_credit_balance?: boolean;
 }
 
 export class PaymentDetails {
@@ -46,4 +42,57 @@ export class PaymentDetails {
   @IsOptional()
   @IsString()
   description: string;
+
+  @IsOptional()
+  @IsBoolean()
+  is_from_credit_balance?: boolean;
+}
+
+export class CreateStudentsPaymentDto {
+  @IsArray()
+  student_ids: string[];
+
+  @IsNumber()
+  amount: number;
+
+  @IsDateString()
+  payment_date: Date;
+
+  @IsString()
+  @IsOptional()
+  payment_description?: string;
+
+  @IsString()
+  payment_method_id: string;
+
+  @IsString()
+  reference_number: string;
+}
+
+export class CreateStudentAutomatizedPaymentDto {
+  @IsString()
+  student_id: string;
+
+  @IsNumber()
+  amount: number;
+
+  @IsString()
+  payment_method_id: string;
+
+  @IsString()
+  reference_number: string;
+
+  @IsDateString()
+  payment_date: Date;
+}
+
+export class CreateStudentPaymentDevolutionDto {
+  @IsString()
+  student_id: string;
+
+  @IsNumber()
+  amount: number;
+
+  @IsString()
+  reason: string;
 }

@@ -1,8 +1,9 @@
 import { Injectable } from '@nestjs/common';
 
-import { ProgramsRepository } from './programs.repository';
 import User from 'src/auth/interfaces/user.interface';
 import { ValidRoles } from 'src/auth/interfaces';
+
+import { ProgramsRepository } from './programs.repository';
 
 @Injectable()
 export class ProgramsService {
@@ -28,6 +29,6 @@ export class ProgramsService {
   }
 
   getProgramById(id: string) {
-    return `This action returns a #${id} program`;
+    return this.programsRepository.getProgramById(id);
   }
 }

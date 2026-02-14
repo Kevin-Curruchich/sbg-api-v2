@@ -11,6 +11,9 @@ import { AuthModule } from './auth/auth.module';
 import { PaymentAssistantModule } from './payment-assistant/payment-assistant.module';
 import { ReportsModule } from './reports/reports.module';
 import { GeneralModule } from './general/general.module';
+import { GradesModule } from './grades/grades.module';
+import { TermsModule } from './terms/terms.module';
+import { CoursesModule } from './courses/courses.module';
 
 @Module({
   controllers: [AppController],
@@ -26,6 +29,9 @@ import { GeneralModule } from './general/general.module';
     PaymentAssistantModule,
     ReportsModule,
     GeneralModule,
+    GradesModule,
+    TermsModule,
+    CoursesModule,
   ],
 })
 export class AppModule {}

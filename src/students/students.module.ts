@@ -4,9 +4,10 @@ import { StudentController } from './students.controller';
 import { StudentsRepository } from './students.repository';
 import { PrismaModule } from '../prisma/prisma.module';
 import { AuthModule } from 'src/auth/auth.module';
+import { ProgramsModule } from 'src/programs/programs.module';
 
 @Module({
-  imports: [PrismaModule, AuthModule],
+  imports: [PrismaModule, AuthModule, ProgramsModule],
   controllers: [StudentController],
   providers: [StudentService, StudentsRepository],
   exports: [StudentService],

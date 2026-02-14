@@ -3,18 +3,14 @@ import {
   Get,
   Post,
   Body,
-  Patch,
   Param,
   Query,
+  Put,
+  Res,
 } from '@nestjs/common';
 import { ApiBearerAuth } from '@nestjs/swagger';
 import { StudentService } from './students.service';
-import { CreateStudentDto } from './dto/create-student.dto';
-import { UpdateStudentDto } from './dto/update-student.dto';
-import {
-  GetStudentsPaginationQueryDto,
-  GetStudentsQueryDto,
-} from './dto/get-students-query.dto';
+import { Response } from 'express';
 
 import { Auth } from 'src/auth/decorators/auth.decorator';
 import { Public } from 'src/auth/decorators/public.decorator';
@@ -22,8 +18,15 @@ import { ValidRoles } from 'src/auth/interfaces';
 import { GetUser } from 'src/auth/decorators/get-user.decorator';
 import User from 'src/auth/interfaces/user.interface';
 
+import { CreateStudentDto } from './dto/create-student.dto';
+import { UpdateStudentDto } from './dto/update-student.dto';
+import {
+  GetStudentsPaginationQueryDto,
+  GetStudentsQueryDto,
+} from './dto/get-students-query.dto';
+
 @Controller('students')
-@Auth(ValidRoles.admin, ValidRoles.superuser)
+@Auth(ValidRoles.admin, ValidRoles.superuser, ValidRoles.academic)
 @ApiBearerAuth()
 export class StudentController {
   constructor(private readonly studentService: StudentService) {}
@@ -31,6 +34,24 @@ export class StudentController {
   @Post()
   createStudent(@Body() createStudentDto: CreateStudentDto) {
     return this.studentService.createStudent(createStudentDto);
+  }
+
+  @Put(':studentId')
+  updateStudent(
+    @Param('studentId') studentId: string,
+    @Body() updateStudentDto: UpdateStudentDto,
+  ) {
+    return this.studentService.updateStudent(studentId, updateStudentDto);
+  }
+
+  @Put(':studentId/inactivate')
+  inactivateStudent(@Param('studentId') studentId: string) {
+    return this.studentService.inactivateStudent(studentId);
+  }
+
+  @Put(':studentId/activate')
+  reactivateStudent(@Param('studentId') studentId: string) {
+    return this.studentService.reactivateStudent(studentId);
   }
 
   @Get()
@@ -61,13 +82,31 @@ export class StudentController {
     return this.studentService.getStudentByIdentifier(term);
   }
 
+  @Get('report')
+  async downloadStudentReport(
+    @Query()
+    queryFilters: GetStudentsQueryDto,
+    @GetUser() user: User,
+    @Res() res: Response,
+  ) {
+    const reportBuffer = await this.studentService.generateStudentReport(
+      queryFilters,
+      user,
+    );
+
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    );
+    res.setHeader(
+      'Content-Disposition',
+      'attachment; filename=students-report.xlsx',
+    );
+    res.send(reportBuffer);
+  }
+
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.studentService.getStudentById(id);
-  }
-
-  @Patch(':id')
-  update(@Param('id') id: string, @Body() updateStudentDto: UpdateStudentDto) {
-    return this.studentService.update(+id, updateStudentDto);
   }
 }
