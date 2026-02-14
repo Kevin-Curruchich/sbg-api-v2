@@ -22,14 +22,20 @@ export class CoursesRepository {
       this.prismaService.courses,
       {
         where: {
-          name: {
-            contains: getCourseDto.searchTerm,
-            mode: 'insensitive',
-          },
-          description: {
-            contains: getCourseDto.searchTerm,
-            mode: 'insensitive',
-          },
+          OR: [
+            {
+              name: {
+                contains: getCourseDto.searchTerm,
+                mode: 'insensitive',
+              },
+            },
+            {
+              description: {
+                contains: getCourseDto.searchTerm,
+                mode: 'insensitive',
+              },
+            },
+          ],
           program_id: getCourseDto.program_id,
         },
         include: {
